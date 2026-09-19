@@ -1,0 +1,53 @@
+# ==============================================================================
+# AI & DATA SCIENCE UNIVERSAL GITIGNORE
+# ==============================================================================
+
+# 1. Virtual Environments (Keep your machine's dependencies local)
+.venv/
+venv/
+env/
+ENV/
+*.pyc
+__pycache__/
+
+# 2. Jupyter Notebooks (Ignore hidden checkpoints and autosaves)
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+.local
+.jupyter
+
+# 3. Data & Large Datasets (NEVER commit massive CSVs, ZIPs, or H5 models to Git)
+*.csv
+*.xlsx
+*.json
+*.zip
+*.tar.gz
+*.rar
+*.parquet
+*.pkl
+*.pickle
+
+# Exception: If you have a small sample configuration dataset you WANT to track:
+# !data/sample.csv
+
+# 4. Deep Learning / Machine Learning Models & Weights
+*.h5
+*.pth
+*.pt
+*.onnx
+*.pkl
+*.model
+*.ckpt
+checkpoint/
+
+# 5. IDEs & Editors (VS Code, PyCharm)
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 6. Credentials & Environment Variables (Crucial for API keys like OpenAI, Kaggle)
+.env
+.env.local
+credentials.json
+kaggle.json
