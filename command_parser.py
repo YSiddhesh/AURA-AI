@@ -123,6 +123,19 @@ def remove_device_from_command(command):
 
     return command.strip()
 
+def build_result(intent, target=None, device=None):
+    result = {
+        "intent": intent,
+        "entities": {}
+    }
+
+    if target is not None:
+        result["entities"]["target"] = target
+
+    if device is not None:
+        result["entities"]["device"] = device
+
+    return result
 
 def parse_command(command):
     command = clean_command(command)
