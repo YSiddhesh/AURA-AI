@@ -46,6 +46,21 @@ DEVICE_ALIASES = {
 }
 
 
+def build_result(intent, target=None, device=None):
+    result = {
+        "intent": intent,
+        "entities": {}
+    }
+
+    if target is not None:
+        result["entities"]["target"] = target
+
+    if device is not None:
+        result["entities"]["device"] = device
+
+    return result
+
+
 def clean_command(command):
     command = command.lower().strip()
 
@@ -97,20 +112,9 @@ def mentions_android_device(command):
 
 
 def remove_device_from_command(command):
-    """
-    Removes phrases such as:
-    on phone 1
-    on my first phone
-    on the second phone
-    on realme
-    on siddhesh phone
-    on kirti phone
-    on redmi
-    """
 
     command = command.lower()
 
-    # Remove "on/in my/the ..."
     for device, aliases in DEVICE_ALIASES.items():
         for alias in aliases:
             pattern = (
@@ -123,30 +127,17 @@ def remove_device_from_command(command):
 
     return command.strip()
 
-def build_result(intent, target=None, device=None):
-    result = {
-        "intent": intent,
-        "entities": {}
-    }
-
-    if target is not None:
-        result["entities"]["target"] = target
-
-    if device is not None:
-        result["entities"]["device"] = device
-
-    return result
 
 def parse_command(command):
+
     command = clean_command(command)
 
     if not command:
-        return {
-            "intent": "unknown",
-            "target": None
-        }
+        return build_result("unknown")
 
+    # --------------------------------
     # Detect device
+    # --------------------------------
     device = find_device(command) or "phone1"
 
     has_device = mentions_android_device(command)
@@ -158,11 +149,10 @@ def parse_command(command):
         r"\b(go home|home)\b",
         command
     ):
-        return {
-            "intent": "android_home",
-            "target": None,
-            "device": device
-        }
+        return build_result(
+            "android_home",
+            device=device
+        )
 
     # --------------------------------
     # Android Back
@@ -171,11 +161,10 @@ def parse_command(command):
         r"\b(go back|back)\b",
         command
     ):
-        return {
-            "intent": "android_back",
-            "target": None,
-            "device": device
-        }
+        return build_result(
+            "android_back",
+            device=device
+        )
 
     # --------------------------------
     # Android Battery
@@ -184,11 +173,10 @@ def parse_command(command):
         r"\bbattery\b",
         command
     ):
-        return {
-            "intent": "android_battery",
-            "target": None,
-            "device": device
-        }
+        return build_result(
+            "android_battery",
+            device=device
+        )
 
     # --------------------------------
     # Android Device Information
@@ -204,11 +192,10 @@ def parse_command(command):
                 command
             )
         ):
-            return {
-                "intent": "android_device_info",
-                "target": None,
-                "device": device
-            }
+            return build_result(
+                "android_device_info",
+                device=device
+            )
 
     # --------------------------------
     # Laptop Lock
@@ -217,10 +204,10 @@ def parse_command(command):
         re.search(r"\block\b", command)
         and not has_device
     ):
-        return {
-            "intent": "lock_device",
-            "target": "laptop"
-        }
+        return build_result(
+            "lock_device",
+            target="laptop"
+        )
 
     # --------------------------------
     # Android Lock
@@ -230,11 +217,10 @@ def parse_command(command):
         re.search(r"\block\b", command)
         and has_device
     ):
-        return {
-            "intent": "android_lock",
-            "target": None,
-            "device": device
-        }
+        return build_result(
+            "android_lock",
+            device=device
+        )
 
     # --------------------------------
     # Open / Launch / Start / Run
@@ -250,38 +236,27 @@ def parse_command(command):
     )
 
     if not match:
-        return {
-            "intent": "unknown",
-            "target": None
-        }
+        return build_result("unknown")
 
     target = command[match.end():].strip()
 
     # --------------------------------
     # Determine Android command
-    # BEFORE removing device wording
     # --------------------------------
     is_android_command = mentions_android_device(target)
 
     if is_android_command:
+
         device = find_device(target) or "phone1"
 
-        # Remove phrases such as:
-        # "on phone one"
-        # "on my first phone"
-        # "on realme"
-        # "on kirti phone"
-        # "on redmi"
         target = remove_device_from_command(target)
 
-        # Remove common filler words
         target = re.sub(
             r"^(?:the|my|a|an|file|application|app)\s+",
             "",
             target
         ).strip()
 
-        # Find Android application
         app_name = find_app(
             target,
             ANDROID_APPS
@@ -289,15 +264,12 @@ def parse_command(command):
 
         if app_name:
             return build_result(
-            "open_android_app",
-            target=app_name,
-            device=device
-        )
+                "open_android_app",
+                target=app_name,
+                device=device
+            )
 
-        return {
-            "intent": "unknown",
-            "target": None
-        }
+        return build_result("unknown")
 
     # --------------------------------
     # Windows application
@@ -314,30 +286,30 @@ def parse_command(command):
     )
 
     if app_name:
-        return {
-            "intent": "open_application",
-            "target": app_name
-        }
+        return build_result(
+            "open_application",
+            target=app_name
+        )
 
     # --------------------------------
     # Windows file
     # --------------------------------
     if target:
-        return {
-            "intent": "open_file",
-            "target": target
-        }
+        return build_result(
+            "open_file",
+            target=target
+        )
 
-    return {
-        "intent": "unknown",
-        "target": None
-    }
+    return build_result("unknown")
 
+
+# --------------------------------
+# TESTING
+# --------------------------------
 
 if __name__ == "__main__":
 
     tests = [
-        # Existing commands
         "Hey AURA, open YouTube on my phone",
         "Hey AURA, open YouTube on phone 1",
         "Hey AURA, open YouTube on phone 2",
@@ -345,24 +317,20 @@ if __name__ == "__main__":
         "Hey AURA, open Notepad",
         "Lock my laptop",
 
-        # Existing Android commands
         "Hey AURA, open Chrome on phone 1",
         "Hey AURA, open WhatsApp on phone 2",
         "Hey AURA, open Settings on phone 1",
 
-        # Android controls
         "Hey AURA, go home on phone 1",
         "Hey AURA, go back on phone 1",
         "Hey AURA, go home on phone 2",
         "Hey AURA, go back on phone 2",
 
-        # Device information
         "Check phone 1 battery",
         "Check phone 2 battery",
         "What is my phone model?",
         "What phone is this?",
 
-        # Phase 3 NLU
         "Can you launch YouTube on my first phone?",
         "Start YouTube on my realme",
         "Open Chrome on the second phone",
@@ -379,4 +347,3 @@ if __name__ == "__main__":
             "->",
             parse_command(test)
         )
-
