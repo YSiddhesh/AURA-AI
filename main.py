@@ -28,8 +28,10 @@ def execute_command(command):
     result = parse_command(command)
 
     intent = result["intent"]
-    target = result["target"]
-    device = result.get("device", "phone1")
+    entities = result.get("entities", {})
+
+    target = entities.get("target")
+    device = entities.get("device", "phone1")
 
     if intent == "android_battery":
         return get_battery_level(device)

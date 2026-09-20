@@ -288,11 +288,11 @@ def parse_command(command):
         )
 
         if app_name:
-            return {
-                "intent": "open_android_app",
-                "target": app_name,
-                "device": device
-            }
+            return build_result(
+            "open_android_app",
+            target=app_name,
+            device=device
+        )
 
         return {
             "intent": "unknown",
