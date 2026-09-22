@@ -36,24 +36,31 @@ def execute_command(command):
     entities = result.get("entities", {})
 
     target = entities.get("target")
-    device = entities.get("device", "phone1")
-    # Update context when a device is explicitly mentioned
-    if "device" in entities:
+    device = entities.get("device")
+
+    # ==========================================
+    # CONTEXT AWARENESS
+    # ==========================================
+
+    # If a device is explicitly mentioned,
+    # remember it for the next command.
+    if device:
         CONTEXT["device"] = device
 
-    if intent == "android_battery":
-        return get_battery_level(device)
+    # If no device is mentioned, use the
+    # previously remembered device.
+    elif intent in [
+        "android_battery",
+        "android_device_info",
+        "android_home",
+        "android_back",
+        "open_android_app"
+    ]:
+        device = CONTEXT["device"] or "phone1"
 
-    if intent == "android_device_info":
-        return get_device_info(device)
-    if intent == "android_home":
-        return android_home(device)
-
-    if intent == "android_back":
-        return android_back(device)
-
-    if intent == "android_lock":
-        return android_lock(device)
+    # ==========================================
+    # WINDOWS
+    # ==========================================
 
     if intent == "open_application":
         return open_application(target)
@@ -64,11 +71,26 @@ def execute_command(command):
     if intent == "lock_device":
         return lock_laptop()
 
+    # ==========================================
+    # ANDROID
+    # ==========================================
+
     if intent == "open_android_app":
-        return open_android_app(target,device)
+        return open_android_app(target, device)
+
+    if intent == "android_home":
+        return android_home(device)
+
+    if intent == "android_back":
+        return android_back(device)
+
+    if intent == "android_battery":
+        return get_battery_level(device)
+
+    if intent == "android_device_info":
+        return get_device_info(device)
 
     return "Sorry, I don't understand that command."
-
 
 print("================================")
 print("        AURA AI - Phase 2")
