@@ -130,6 +130,13 @@ def remove_device_from_command(command):
 
     return command.strip()
 
+def uses_previous_device(command):
+    return bool(
+        re.search(
+            r"\b(its|that phone|this phone|same phone|there)\b",
+            command.lower()
+        )
+    )
 
 def parse_command(command):
 
@@ -142,9 +149,17 @@ def parse_command(command):
     # DETECT DEVICE
     # ==========================================
 
-    device = find_device(command) or "phone1"
+    device = find_device(command)
 
     has_device = mentions_android_device(command)
+
+    uses_context = uses_previous_device(command)
+
+    if device:
+        has_device = True
+        if uses_context and not device:
+            device = None
+            has_device = True
 
     # ==========================================
     # ANDROID HOME
