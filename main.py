@@ -37,6 +37,9 @@ def execute_command(command):
 
     target = entities.get("target")
     device = entities.get("device", "phone1")
+    # Update context when a device is explicitly mentioned
+    if "device" in entities:
+        CONTEXT["device"] = device
 
     if intent == "android_battery":
         return get_battery_level(device)
