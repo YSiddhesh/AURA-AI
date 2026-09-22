@@ -17,6 +17,11 @@ from android_control import (
 
 
 WAKE_WORD = "hey aura"
+# Stores the context of the previous command
+CONTEXT = {
+    "device": None,
+    "target": None
+}
 
 
 def detect_wake_word(text):
