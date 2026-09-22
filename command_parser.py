@@ -28,9 +28,14 @@ ANDROID_APPS = {
 DEVICE_ALIASES = {
     "phone1": [
         "siddhesh phone",
+        "phone 1",
+        "phone one",
     ],
+
     "phone2": [
         "aai phone",
+        "phone 2",
+        "phone two",
     ],
 }
 
