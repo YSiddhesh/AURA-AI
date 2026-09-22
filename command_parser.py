@@ -157,7 +157,8 @@ def parse_command(command):
 
     if device:
         has_device = True
-        if uses_context and not device:
+
+    if uses_context and not device:
             device = None
             has_device = True
 
