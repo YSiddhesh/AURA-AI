@@ -16,12 +16,12 @@ from android_control import (
 )
 
 
-WAKE_WORDS = ["aura", "hey aura", "okay aura", "ok aura"]
+WAKE_WORD = "hey aura"
 
 
 def detect_wake_word(text):
     text = text.lower().strip()
-    return any(wake_word in text for wake_word in WAKE_WORDS)
+    return "hey aura" in text
 
 
 def execute_command(command):
@@ -66,7 +66,7 @@ print("================================")
 print("        AURA AI - Phase 2")
 print("================================")
 print("AURA is waiting for the wake word...")
-print("Say: Hey AURA")
+print("Say: Hey Aura")
 print("================================")
 
 

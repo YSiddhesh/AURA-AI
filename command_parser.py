@@ -21,27 +21,16 @@ ANDROID_APPS = {
 }
 
 
+# ==========================================
+# ANDROID DEVICE NAMES
+# ==========================================
+
 DEVICE_ALIASES = {
     "phone1": [
-        "phone 1",
-        "phone one",
-        "first phone",
-        "android 1",
-        "android one",
-        "first android",
         "siddhesh phone",
-        "realme",
     ],
     "phone2": [
-        "phone 2",
-        "phone two",
-        "second phone",
-        "android 2",
-        "android two",
-        "second android",
-        "kirti phone",
-        "redmi",
-        "xiaomi",
+        "aai phone",
     ],
 }
 
@@ -64,8 +53,12 @@ def build_result(intent, target=None, device=None):
 def clean_command(command):
     command = command.lower().strip()
 
+    # Remove "Aura" from commands.
+    # Examples:
+    # Aura, open YouTube
+    # Aura open YouTube
     command = re.sub(
-        r"\b(hey|okay|ok)?\s*aura\b",
+        r"\baura\b",
         "",
         command
     )
@@ -117,13 +110,18 @@ def remove_device_from_command(command):
 
     for device, aliases in DEVICE_ALIASES.items():
         for alias in aliases:
+
             pattern = (
                 rf"\b(?:on|in)\s+"
                 rf"(?:my|the)?\s*"
                 rf"{re.escape(alias.lower())}\b"
             )
 
-            command = re.sub(pattern, "", command)
+            command = re.sub(
+                pattern,
+                "",
+                command
+            )
 
     return command.strip()
 
@@ -135,16 +133,18 @@ def parse_command(command):
     if not command:
         return build_result("unknown")
 
-    # --------------------------------
-    # Detect device
-    # --------------------------------
+    # ==========================================
+    # DETECT DEVICE
+    # ==========================================
+
     device = find_device(command) or "phone1"
 
     has_device = mentions_android_device(command)
 
-    # --------------------------------
-    # Android Home
-    # --------------------------------
+    # ==========================================
+    # ANDROID HOME
+    # ==========================================
+
     if has_device and re.search(
         r"\b(go home|home)\b",
         command
@@ -154,9 +154,10 @@ def parse_command(command):
             device=device
         )
 
-    # --------------------------------
-    # Android Back
-    # --------------------------------
+    # ==========================================
+    # ANDROID BACK
+    # ==========================================
+
     if has_device and re.search(
         r"\b(go back|back)\b",
         command
@@ -166,9 +167,10 @@ def parse_command(command):
             device=device
         )
 
-    # --------------------------------
-    # Android Battery
-    # --------------------------------
+    # ==========================================
+    # ANDROID BATTERY
+    # ==========================================
+
     if has_device and re.search(
         r"\bbattery\b",
         command
@@ -178,13 +180,15 @@ def parse_command(command):
             device=device
         )
 
-    # --------------------------------
-    # Android Device Information
-    # --------------------------------
+    # ==========================================
+    # ANDROID DEVICE INFORMATION
+    # ==========================================
+
     if re.search(
         r"\b(model|manufacturer|device info|which phone|what phone)\b",
         command
     ):
+
         if (
             has_device
             or re.search(
@@ -197,9 +201,10 @@ def parse_command(command):
                 device=device
             )
 
-    # --------------------------------
-    # Laptop Lock
-    # --------------------------------
+    # ==========================================
+    # LAPTOP LOCK
+    # ==========================================
+
     if (
         re.search(r"\block\b", command)
         and not has_device
@@ -209,10 +214,11 @@ def parse_command(command):
             target="laptop"
         )
 
-    # --------------------------------
-    # Android Lock
-    # Feature currently skipped
-    # --------------------------------
+    # ==========================================
+    # ANDROID LOCK
+    # SKIPPED FEATURE
+    # ==========================================
+
     if (
         re.search(r"\block\b", command)
         and has_device
@@ -222,9 +228,10 @@ def parse_command(command):
             device=device
         )
 
-    # --------------------------------
-    # Open / Launch / Start / Run
-    # --------------------------------
+    # ==========================================
+    # OPEN / LAUNCH / START / RUN
+    # ==========================================
+
     action_pattern = (
         r"^(?:please\s+|can you\s+|could you\s+|would you\s+)?"
         r"(?:open|launch|start|run)\s+"
@@ -240,9 +247,10 @@ def parse_command(command):
 
     target = command[match.end():].strip()
 
-    # --------------------------------
-    # Determine Android command
-    # --------------------------------
+    # ==========================================
+    # ANDROID COMMAND
+    # ==========================================
+
     is_android_command = mentions_android_device(target)
 
     if is_android_command:
@@ -271,9 +279,10 @@ def parse_command(command):
 
         return build_result("unknown")
 
-    # --------------------------------
-    # Windows application
-    # --------------------------------
+    # ==========================================
+    # WINDOWS APPLICATION
+    # ==========================================
+
     target = re.sub(
         r"^(?:the|my|a|an|file|application|app)\s+",
         "",
@@ -291,9 +300,10 @@ def parse_command(command):
             target=app_name
         )
 
-    # --------------------------------
-    # Windows file
-    # --------------------------------
+    # ==========================================
+    # WINDOWS FILE
+    # ==========================================
+
     if target:
         return build_result(
             "open_file",
@@ -303,42 +313,42 @@ def parse_command(command):
     return build_result("unknown")
 
 
-# --------------------------------
+# ==========================================
 # TESTING
-# --------------------------------
+# ==========================================
 
 if __name__ == "__main__":
 
     tests = [
-        "Hey AURA, open YouTube on my phone",
-        "Hey AURA, open YouTube on phone 1",
-        "Hey AURA, open YouTube on phone 2",
-        "Open YouTube on Android 2",
-        "Hey AURA, open Notepad",
-        "Lock my laptop",
 
-        "Hey AURA, open Chrome on phone 1",
-        "Hey AURA, open WhatsApp on phone 2",
-        "Hey AURA, open Settings on phone 1",
+        # Wake/command style
+        "Aura, open YouTube on Siddhesh phone",
+        "Aura, open YouTube on Aai phone",
 
-        "Hey AURA, go home on phone 1",
-        "Hey AURA, go back on phone 1",
-        "Hey AURA, go home on phone 2",
-        "Hey AURA, go back on phone 2",
+        # Android applications
+        "Aura, open Chrome on Siddhesh phone",
+        "Aura, open WhatsApp on Aai phone",
+        "Aura, open Settings on Siddhesh phone",
 
-        "Check phone 1 battery",
-        "Check phone 2 battery",
-        "What is my phone model?",
-        "What phone is this?",
+        # Android controls
+        "Aura, go home on Siddhesh phone",
+        "Aura, go back on Siddhesh phone",
+        "Aura, go home on Aai phone",
+        "Aura, go back on Aai phone",
 
-        "Can you launch YouTube on my first phone?",
-        "Start YouTube on my realme",
-        "Open Chrome on the second phone",
-        "Open WhatsApp on xiaomi",
-        "Open WhatsApp on Kirti phone",
-        "Open WhatsApps on Siddhesh phone",
-        "Open YouTube on Siddhesh phone",
-        "Start Chrome on Kirti phone",
+        # Battery
+        "Aura, check Siddhesh phone battery",
+        "Aura, check Aai phone battery",
+
+        # Device information
+        "Aura, what is Siddhesh phone model",
+        "Aura, what is Aai phone model",
+
+        # Windows
+        "Aura, open Notepad",
+        "Aura, open Calculator",
+        "Aura, open Paint",
+        "Aura, lock my laptop",
     ]
 
     for test in tests:
