@@ -100,7 +100,13 @@ def execute_command(command):
     if intent == "android_device_info":
         return get_device_info(device)
 
-    return "Sorry, I don't understand that command."
+    if intent == "unknown":
+        return (
+            "I don't understand that command yet. "
+            "Please try another command."
+        )
+
+    return "Sorry, something went wrong while processing the command."
 
 print("================================")
 print("        AURA AI - Phase 2")
