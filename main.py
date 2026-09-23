@@ -20,9 +20,9 @@ WAKE_WORD = "hey aura"
 # Stores the context of the previous command
 CONTEXT = {
     "device": None,
-    "target": None
+    "target": None,
+    "intent": None
 }
-
 
 def detect_wake_word(text):
     text = text.lower().strip()
