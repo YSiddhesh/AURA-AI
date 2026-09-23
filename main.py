@@ -42,20 +42,30 @@ def execute_command(command):
     # CONTEXT AWARENESS
     # ==========================================
 
-    # If a device is explicitly mentioned,
-    # remember it for the next command.
+
+    # Remember explicitly mentioned device
     if device:
         CONTEXT["device"] = device
 
-    # If no device is mentioned, use the
-    # previously remembered device.
-    elif intent in [
-        "android_battery",
-        "android_device_info",
-        "android_home",
-        "android_back",
-        "open_android_app"
-    ]:
+    # Remember target
+    if target:
+        CONTEXT["target"] = target
+
+    # Remember the latest valid intent
+    if intent != "unknown":
+        CONTEXT["intent"] = intent
+
+    # If no device was mentioned, use previous device
+    if (
+        not device
+        and intent in [
+            "android_battery",
+            "android_device_info",
+            "android_home",
+            "android_back",
+            "open_android_app"
+        ]
+    ):
         device = CONTEXT["device"] or "phone1"
 
     # ==========================================
