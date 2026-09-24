@@ -70,10 +70,13 @@ def execute_command(command):
 
     # Android app command without a specific phone
     if intent == "open_android_app" and not entities.get("device"):
+        CONTEXT["pending_intent"] = "open_android_app"
+        CONTEXT["target"] = target
         return "Which phone should I open it on?"
 
     # Battery command without a specific phone
     if intent == "android_battery" and not entities.get("device"):
+        CONTEXT["pending_intent"] = "android_battery"
         return "Which phone's battery should I check?"
 
     # Device information without a specific phone
