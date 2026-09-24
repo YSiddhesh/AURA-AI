@@ -39,6 +39,22 @@ def execute_command(command):
     device = entities.get("device")
 
     # ==========================================
+    # CLARIFICATION HANDLING
+    # ==========================================
+
+    # Android app command without a specific phone
+    if intent == "open_android_app" and not entities.get("device"):
+        return "Which phone should I open it on?"
+
+    # Battery command without a specific phone
+    if intent == "android_battery" and not entities.get("device"):
+        return "Which phone's battery should I check?"
+
+    # Device information without a specific phone
+    if intent == "android_device_info" and not entities.get("device"):
+        return "Which phone should I check?"
+
+    # ==========================================
     # CONTEXT AWARENESS
     # ==========================================
 
@@ -59,11 +75,8 @@ def execute_command(command):
     if (
         not device
         and intent in [
-            "android_battery",
-            "android_device_info",
             "android_home",
-            "android_back",
-            "open_android_app"
+            "android_back"
         ]
     ):
         device = CONTEXT["device"] or "phone1"
