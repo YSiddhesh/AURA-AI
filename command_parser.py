@@ -30,6 +30,8 @@ DEVICE_ALIASES = {
         "siddhesh phone",
         "phone 1",
         "phone one",
+        "mobile 1",
+        "mobile one",
     ],
 
     "phone2": [
