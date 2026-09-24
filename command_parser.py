@@ -38,6 +38,8 @@ DEVICE_ALIASES = {
         "aai phone",
         "phone 2",
         "phone two",
+        "mobile 2",
+        "mobile two",
     ],
 }
 
