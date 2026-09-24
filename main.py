@@ -156,22 +156,44 @@ print("Say: Hey Aura")
 print("================================")
 
 
+
 while True:
     try:
-        text = listen(duration=3)
+        # ==========================================
+        # NORMAL MODE / CLARIFICATION MODE
+        # ==========================================
 
-        if detect_wake_word(text):
-            print("\nAURA: Yes? How can I help?")
-            command = listen(duration= 5)
+        if CONTEXT["pending_intent"]:
+            # AURA is waiting for the user's clarification answer
+            text = listen(duration=5)
 
-            if not command:
-                print("AURA: I didn't hear a command.")
+            if not text:
+                print("AURA: I didn't hear your answer.")
                 continue
 
-            response = execute_command(command)
+            print("Heard:", text)
+
+            response = execute_command(text)
             print("AURA:", response)
+
         else:
-            print("AURA: Wake word not detected.")
+            # Normal mode: wait for wake word
+            text = listen(duration=3)
+
+            if detect_wake_word(text):
+                print("\nAURA: Yes? How can I help?")
+
+                command = listen(duration=5)
+
+                if not command:
+                    print("AURA: I didn't hear a command.")
+                    continue
+
+                response = execute_command(command)
+                print("AURA:", response)
+
+            else:
+                print("AURA: Wake word not detected.")
 
     except KeyboardInterrupt:
         print("\nAURA: Goodbye!")
@@ -179,6 +201,8 @@ while True:
 
     except Exception as e:
         print("AURA Error:", e)
+
+
 
 
         
