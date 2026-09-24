@@ -21,7 +21,8 @@ WAKE_WORD = "hey aura"
 CONTEXT = {
     "device": None,
     "target": None,
-    "intent": None
+    "intent": None,
+    "pending_intent": None
 }
 
 def detect_wake_word(text):
@@ -39,6 +40,31 @@ def execute_command(command):
     device = entities.get("device")
 
     # ==========================================
+    # PENDING CLARIFICATION
+    # ==========================================
+
+    if CONTEXT["pending_intent"]:
+        pending_intent = CONTEXT["pending_intent"]
+
+        # User provided a phone/device as the answer
+        if device:
+            if pending_intent == "android_battery":
+                CONTEXT["pending_intent"] = None
+                return get_battery_level(device)
+
+            if pending_intent == "android_device_info":
+                CONTEXT["pending_intent"] = None
+                return get_device_info(device)
+
+            if pending_intent == "open_android_app":
+                pending_target = CONTEXT["target"]
+                CONTEXT["pending_intent"] = None
+                return open_android_app(pending_target, device)
+
+        # If the answer wasn't understood
+        return "Please specify which phone you mean."
+
+    # ==========================================
     # CLARIFICATION HANDLING
     # ==========================================
 
@@ -52,6 +78,7 @@ def execute_command(command):
 
     # Device information without a specific phone
     if intent == "android_device_info" and not entities.get("device"):
+        CONTEXT["pending_intent"] = "android_device_info"
         return "Which phone should I check?"
 
     # ==========================================
