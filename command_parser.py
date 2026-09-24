@@ -196,14 +196,8 @@ def parse_command(command):
     # ANDROID BATTERY
     # ==========================================
 
-    if has_device and re.search(
-        r"\bbattery\b",
-        command
-    ):
-        return build_result(
-            "android_battery",
-            device=device
-        )
+    if re.search(r"\b(check|show|tell|what is|what's)\b.*\bbattery\b", command):
+        return build_result("android_battery", device=device if has_device else None)
 
     # ==========================================
     # ANDROID DEVICE INFORMATION
@@ -383,4 +377,3 @@ if __name__ == "__main__":
             parse_command(test)
         )
 
-        
