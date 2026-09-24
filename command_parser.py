@@ -377,3 +377,6 @@ if __name__ == "__main__":
             parse_command(test)
         )
 
+print(parse_command("check battery"))
+print(parse_command("check battery on phone 1"))
+print(parse_command("check battery on phone 2"))
