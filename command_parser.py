@@ -131,6 +131,7 @@ def remove_device_from_command(command):
 
     return command.strip()
 
+
 def uses_previous_device(command):
     return bool(
         re.search(
@@ -139,12 +140,36 @@ def uses_previous_device(command):
         )
     )
 
+
 def parse_command(command):
 
     command = clean_command(command)
 
     if not command:
         return build_result("unknown")
+
+    # ==========================================
+    # STANDALONE DEVICE SELECTION
+    # Used when AURA asks:
+    # "Which phone should I check?"
+    #
+    # Examples:
+    # Phone 1
+    # Phone 2
+    # Phone one
+    # Phone two
+    # Mobile 1
+    # Mobile 2
+    # ==========================================
+
+    if re.fullmatch(
+        r"(?:phone 1|phone one|mobile 1|mobile one|phone 2|phone two|mobile 2|mobile two)",
+        command
+    ):
+        return build_result(
+            "select_device",
+            device=find_device(command)
+        )
 
     # ==========================================
     # DETECT DEVICE
@@ -160,8 +185,8 @@ def parse_command(command):
         has_device = True
 
     if uses_context and not device:
-            device = None
-            has_device = True
+        device = None
+        has_device = True
 
     # ==========================================
     # ANDROID HOME
@@ -193,8 +218,14 @@ def parse_command(command):
     # ANDROID BATTERY
     # ==========================================
 
-    if re.search(r"\b(check|show|tell|what is|what's)\b.*\bbattery\b", command):
-        return build_result("android_battery", device=device if has_device else None)
+    if re.search(
+        r"\b(check|show|tell|what is|what's)\b.*\bbattery\b",
+        command
+    ):
+        return build_result(
+            "android_battery",
+            device=device if has_device else None
+        )
 
     # ==========================================
     # ANDROID DEVICE INFORMATION
@@ -337,28 +368,35 @@ if __name__ == "__main__":
 
     tests = [
 
-        # Wake/command style
-        "Aura, open YouTube on Siddhesh phone",
-        "Aura, open YouTube on Aai phone",
-
         # Android applications
-        "Aura, open Chrome on Siddhesh phone",
-        "Aura, open WhatsApp on Aai phone",
-        "Aura, open Settings on Siddhesh phone",
+        "Aura, open YouTube on phone 1",
+        "Aura, open YouTube on phone 2",
+
+        "Aura, open Chrome on phone 1",
+        "Aura, open WhatsApp on phone 2",
+        "Aura, open Settings on phone 1",
 
         # Android controls
-        "Aura, go home on Siddhesh phone",
-        "Aura, go back on Siddhesh phone",
-        "Aura, go home on Aai phone",
-        "Aura, go back on Aai phone",
+        "Aura, go home on phone 1",
+        "Aura, go back on phone 1",
+        "Aura, go home on phone 2",
+        "Aura, go back on phone 2",
 
         # Battery
-        "Aura, check Siddhesh phone battery",
-        "Aura, check Aai phone battery",
+        "Aura, check phone 1 battery",
+        "Aura, check phone 2 battery",
 
         # Device information
-        "Aura, what is Siddhesh phone model",
-        "Aura, what is Aai phone model",
+        "Aura, what is phone 1 model",
+        "Aura, what is phone 2 model",
+
+        # Standalone device selection
+        "Phone 1",
+        "Phone 2",
+        "Phone one",
+        "Phone two",
+        "Mobile 1",
+        "Mobile 2",
 
         # Windows
         "Aura, open Notepad",
@@ -373,6 +411,11 @@ if __name__ == "__main__":
             "->",
             parse_command(test)
         )
+
+
+# ==========================================
+# QUICK BATTERY TESTS
+# ==========================================
 
 print(parse_command("check battery"))
 print(parse_command("check battery on phone 1"))
