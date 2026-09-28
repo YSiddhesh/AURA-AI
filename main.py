@@ -47,7 +47,8 @@ def execute_command(command):
         pending_intent = CONTEXT["pending_intent"]
 
         # User provided a phone/device as the answer
-        if device:
+        if intent == "select_device" and device:
+
             if pending_intent == "android_battery":
                 CONTEXT["pending_intent"] = None
                 return get_battery_level(device)
