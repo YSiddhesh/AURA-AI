@@ -64,12 +64,12 @@ brain. You do not directly control devices yet.
 def ask_aura(user_message):
 
     response = client.models.generate_content(
-        model="gemini-3.8-flash",
-        contents=user_message,
-        config={
-            "system_instruction": SYSTEM_PROMPT
-        }
-    )
+    model="gemini-flash-latest",
+    contents=user_message,
+    config={
+        "system_instruction": SYSTEM_PROMPT
+    }
+)
 
     return response.text
 
