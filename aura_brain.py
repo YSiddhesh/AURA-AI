@@ -1,4 +1,5 @@
 import os
+import time
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -215,37 +216,71 @@ aura_tools = types.Tool(
 
 def ask_aura(user_message):
 
-    response = client.models.generate_content(
-        model="gemini-flash-latest",
-        contents=user_message,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            tools=[aura_tools]
-        )
-    )
+    max_retries = 3
 
-    for candidate in response.candidates:
+    for attempt in range(max_retries):
 
-        for part in candidate.content.parts:
+        try:
 
-            if part.function_call:
-
-                function_call = part.function_call
-
-                tool_name = function_call.name
-                arguments = dict(function_call.args)
-
-                print(f"\nAURA TOOL → {tool_name}")
-                print(f"Arguments → {arguments}")
-
-                result = execute_tool(
-                    tool_name,
-                    arguments
+            response = client.models.generate_content(
+                model="gemini-flash-latest",
+                contents=user_message,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    tools=[aura_tools]
                 )
+            )
 
-                return result
+            for candidate in response.candidates:
 
-    return response.text
+                for part in candidate.content.parts:
+
+                    if part.function_call:
+
+                        function_call = part.function_call
+
+                        tool_name = function_call.name
+                        arguments = dict(function_call.args)
+
+                        print(f"\nAURA TOOL → {tool_name}")
+                        print(f"Arguments → {arguments}")
+
+                        result = execute_tool(
+                            tool_name,
+                            arguments
+                        )
+
+                        return result
+
+            return response.text
+
+        except Exception as e:
+
+            error_text = str(e)
+
+            # Retry temporary Gemini/server errors
+            if "503" in error_text or "UNAVAILABLE" in error_text:
+                
+                if attempt < max_retries - 1:
+
+                    wait_time = 2 ** attempt
+
+                    print(
+                        f"AURA: Gemini temporarily unavailable. "
+                        f"Retrying in {wait_time} seconds..."
+                    )
+
+                    time.sleep(wait_time)
+
+                else:
+
+                    return (
+                        "Gemini is temporarily unavailable. "
+                        "Please try again."
+                    )
+
+            else:
+                raise
 
 
 # ==========================================
