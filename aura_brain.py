@@ -39,34 +39,74 @@ You can control:
 - Android phone 1
 - Android phone 2
 
-Understand natural language.
+Understand natural human language instead of requiring fixed commands.
 
-For Android commands:
-- phone 1 means phone1
-- phone one means phone1
-- mobile 1 means phone1
-- mobile one means phone1
-- phone 2 means phone2
-- phone two means phone2
-- mobile 2 means phone2
-- mobile two means phone2
+DEVICE NAMES:
+- phone 1, phone one, mobile 1, mobile one = phone1
+- phone 2, phone two, mobile 2, mobile two = phone2
 
-Do not invent devices.
+ANDROID APPS:
+- YouTube = youtube
+- Chrome = chrome
+- WhatsApp = whatsapp
+- Settings = settings
 
-If a required device is missing, ask the user which phone they mean.
-
-When a tool is available and the user requests that action,
-use the tool instead of merely explaining what could be done.
-
-After a tool executes, tell the user the result naturally.
+Rules:
+- Never invent a device.
+- Never invent an app.
+- If a required phone is missing, ask which phone.
+- Use tools when the user requests an actual action.
+- After a tool executes, report the result naturally.
 """
 
 
 # ==========================================
-# GEMINI TOOL DEFINITIONS
+# TOOL DEFINITIONS
 # ==========================================
 
-open_android_app_tool = types.FunctionDeclaration(
+open_windows_app = types.FunctionDeclaration(
+    name="open_windows_app",
+    description="Open an approved application on the Windows laptop.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "app_name": types.Schema(
+                type=types.Type.STRING,
+                description="Windows application such as notepad, calculator, or paint."
+            )
+        },
+        required=["app_name"]
+    )
+)
+
+
+open_file = types.FunctionDeclaration(
+    name="open_file",
+    description="Open a file on the Windows laptop.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_name": types.Schema(
+                type=types.Type.STRING,
+                description="Name or path of the file to open."
+            )
+        },
+        required=["file_name"]
+    )
+)
+
+
+lock_laptop = types.FunctionDeclaration(
+    name="lock_laptop",
+    description="Lock the Windows laptop.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={}
+    )
+)
+
+
+open_android_app = types.FunctionDeclaration(
     name="open_android_app",
     description="Open an approved Android application on phone 1 or phone 2.",
     parameters=types.Schema(
@@ -74,12 +114,12 @@ open_android_app_tool = types.FunctionDeclaration(
         properties={
             "app_name": types.Schema(
                 type=types.Type.STRING,
-                description="Android app to open, such as youtube, chrome, whatsapp, or settings."
+                description="Android app: youtube, chrome, whatsapp, or settings."
             ),
             "device": types.Schema(
                 type=types.Type.STRING,
                 enum=["phone1", "phone2"],
-                description="The Android phone on which to open the application."
+                description="Android phone to control."
             )
         },
         required=["app_name", "device"]
@@ -87,8 +127,85 @@ open_android_app_tool = types.FunctionDeclaration(
 )
 
 
+android_home = types.FunctionDeclaration(
+    name="android_home",
+    description="Return an Android phone to its home screen.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "device": types.Schema(
+                type=types.Type.STRING,
+                enum=["phone1", "phone2"]
+            )
+        },
+        required=["device"]
+    )
+)
+
+
+android_back = types.FunctionDeclaration(
+    name="android_back",
+    description="Press the back button on an Android phone.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "device": types.Schema(
+                type=types.Type.STRING,
+                enum=["phone1", "phone2"]
+            )
+        },
+        required=["device"]
+    )
+)
+
+
+get_battery_level = types.FunctionDeclaration(
+    name="get_battery_level",
+    description="Check the battery percentage of an Android phone.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "device": types.Schema(
+                type=types.Type.STRING,
+                enum=["phone1", "phone2"]
+            )
+        },
+        required=["device"]
+    )
+)
+
+
+get_device_info = types.FunctionDeclaration(
+    name="get_device_info",
+    description="Get the manufacturer and model of an Android phone.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "device": types.Schema(
+                type=types.Type.STRING,
+                enum=["phone1", "phone2"]
+            )
+        },
+        required=["device"]
+    )
+)
+
+
+# ==========================================
+# AURA TOOL COLLECTION
+# ==========================================
+
 aura_tools = types.Tool(
-    function_declarations=[open_android_app_tool]
+    function_declarations=[
+        open_windows_app,
+        open_file,
+        lock_laptop,
+        open_android_app,
+        android_home,
+        android_back,
+        get_battery_level,
+        get_device_info
+    ]
 )
 
 
@@ -107,7 +224,6 @@ def ask_aura(user_message):
         )
     )
 
-    # Check whether Gemini requested a tool
     for candidate in response.candidates:
 
         for part in candidate.content.parts:
@@ -119,14 +235,9 @@ def ask_aura(user_message):
                 tool_name = function_call.name
                 arguments = dict(function_call.args)
 
-                print(
-                    f"\nAURA TOOL → {tool_name}"
-                )
-                print(
-                    f"Arguments → {arguments}"
-                )
+                print(f"\nAURA TOOL → {tool_name}")
+                print(f"Arguments → {arguments}")
 
-                # Execute the actual Python function
                 result = execute_tool(
                     tool_name,
                     arguments
@@ -134,7 +245,6 @@ def ask_aura(user_message):
 
                 return result
 
-    # Normal Gemini response
     return response.text
 
 
@@ -145,7 +255,7 @@ def ask_aura(user_message):
 if __name__ == "__main__":
 
     print("================================")
-    print("     AURA AI - Tool Brain")
+    print("     AURA AI - Full Tool Brain")
     print("================================")
     print("Type 'exit' to stop.")
     print("================================\n")
@@ -170,5 +280,3 @@ if __name__ == "__main__":
         except Exception as e:
 
             print("AURA Error:", e)
-
-            
