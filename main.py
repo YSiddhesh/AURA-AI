@@ -1,6 +1,19 @@
-from speech import listen, detect_wake_word
+from speech import listen
 from aura_brain import ask_aura
 
+
+# ==========================================
+# WAKE WORD
+# ==========================================
+
+def detect_wake_word(text):
+    text = text.lower().strip()
+    return "hey aura" in text
+
+
+# ==========================================
+# AURA STARTUP
+# ==========================================
 
 print("================================")
 print("        AURA AI - Phase 3.6")
@@ -10,13 +23,17 @@ print("Say: Hey Aura")
 print("================================")
 
 
+# ==========================================
+# MAIN LOOP
+# ==========================================
+
 while True:
 
     try:
 
-        # ==========================================
+        # ----------------------------------
         # WAIT FOR WAKE WORD
-        # ==========================================
+        # ----------------------------------
 
         text = listen(duration=3)
 
@@ -24,9 +41,9 @@ while True:
 
             print("\nAURA: Yes? How can I help?")
 
-            # ==========================================
-            # LISTEN FOR USER COMMAND
-            # ==========================================
+            # ----------------------------------
+            # LISTEN FOR COMMAND
+            # ----------------------------------
 
             command = listen(duration=5)
 
@@ -35,11 +52,11 @@ while True:
                 print("AURA: I didn't hear a command.")
                 continue
 
-            print("Heard:", command)
+            print("Command:", command)
 
-            # ==========================================
-            # SEND COMMAND TO GEMINI
-            # ==========================================
+            # ----------------------------------
+            # SEND TO GEMINI
+            # ----------------------------------
 
             response = ask_aura(command)
 
