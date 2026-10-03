@@ -319,44 +319,59 @@ def ask_aura(user_message):
                         )
 
                         # Execute actual Python tool
-                        result = execute_tool(
-                        tool_name,
-                        arguments
-                    )
+                        result = execute_tool(tool_name, arguments)
 
+                        aura_state["last_action"] = tool_name
 
-                    # ==================================
-                    # UPDATE AURA DEVICE STATE
-                    # ==================================
+                        if "device" in arguments:
+                            aura_state["last_device"] = arguments["device"]
 
-                    aura_state["last_action"] = tool_name
+                        if tool_name == "open_android_app":
+                            aura_state["last_app"] = arguments.get("app_name")
 
-                    if "device" in arguments:
-                        aura_state["last_device"] = arguments["device"]
+                        print(f"Tool Result → {result}")
 
-                    if tool_name == "open_android_app":
-                        aura_state["last_app"] = arguments.get("app_name")
+                        # Send tool result back to Gemini
+                        tool_response = types.Part.from_function_response(
+                            name=tool_name,
+                            response={
+                                "result": str(result)
+                            }
+                        )
 
-                        # Store the tool action in memory
+                        follow_up = client.models.generate_content(
+                            model="gemini-flash-latest",
+                            contents=[
+                                types.Content(
+                                    role="user",
+                                    parts=[
+                                        types.Part.from_text(
+                                            text=conversation_context
+                                        )
+                                    ]
+                                ),
+                                response.candidates[0].content,
+                                types.Content(
+                                    role="tool",
+                                    parts=[tool_response]
+                                )
+                            ],
+                            config=types.GenerateContentConfig(
+                                system_instruction=SYSTEM_PROMPT,
+                                tools=[aura_tools]
+                            )
+                        )
+
+                        answer = follow_up.text
+
                         conversation_history.append(
                             {
                                 "role": "assistant",
-                                "text": (
-                                    f"Used tool {tool_name} "
-                                    f"with arguments {arguments}."
-                                )
+                                "text": answer
                             }
                         )
 
-                        # Store the tool result in memory
-                        conversation_history.append(
-                            {
-                                "role": "tool",
-                                "text": str(result)
-                            }
-                        )
-
-                        return result
+                        return answer
 
             # ==================================
             # NORMAL GEMINI RESPONSE
