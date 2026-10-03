@@ -227,6 +227,15 @@ aura_tools = types.Tool(
 
 conversation_history = []
 
+# ==========================================
+# AURA DEVICE STATE
+# ==========================================
+
+aura_state = {
+    "last_device": None,
+    "last_app": None,
+    "last_action": None
+}
 
 # ==========================================
 # AURA BRAIN
@@ -235,6 +244,7 @@ conversation_history = []
 def ask_aura(user_message):
 
     global conversation_history
+    global aura_state
 
     # Add the new user message
     conversation_history.append(
@@ -254,6 +264,19 @@ def ask_aura(user_message):
         )
 
     conversation_context = "\n".join(context_parts)
+
+    state_context = f"""
+    CURRENT AURA STATE:
+    Last device: {aura_state["last_device"]}
+    Last Android app: {aura_state["last_app"]}
+    Last action: {aura_state["last_action"]}
+    """
+
+    conversation_context = (
+        state_context
+        + "\n\nCONVERSATION HISTORY:\n"
+        + conversation_context
+    )
 
     max_retries = 3
 
@@ -297,9 +320,22 @@ def ask_aura(user_message):
 
                         # Execute actual Python tool
                         result = execute_tool(
-                            tool_name,
-                            arguments
-                        )
+                        tool_name,
+                        arguments
+                    )
+
+
+                    # ==================================
+                    # UPDATE AURA DEVICE STATE
+                    # ==================================
+
+                    aura_state["last_action"] = tool_name
+
+                    if "device" in arguments:
+                        aura_state["last_device"] = arguments["device"]
+
+                    if tool_name == "open_android_app":
+                        aura_state["last_app"] = arguments.get("app_name")
 
                         # Store the tool action in memory
                         conversation_history.append(
