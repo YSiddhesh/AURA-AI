@@ -52,12 +52,23 @@ ANDROID APPS:
 - WhatsApp = whatsapp
 - Settings = settings
 
-Rules:
+CONVERSATION CONTEXT:
+- Remember relevant information from previous messages.
+- If the user gives a device in a previous message, remember that device
+  for natural follow-up commands when the context clearly refers to it.
+- Understand references such as "that phone", "the same phone", "go back",
+  "go home", or "check its battery" when the previous conversation makes
+  the meaning clear.
+- Do not guess when the referenced device is genuinely ambiguous.
+- Ask for clarification when necessary.
+
+RULES:
 - Never invent a device.
 - Never invent an app.
-- If a required phone is missing, ask which phone.
+- If a required phone is missing or ambiguous, ask which phone.
 - Use tools when the user requests an actual action.
-- After a tool executes, report the result naturally.
+- Do not use tools for normal conversation or general questions.
+- Give concise and natural responses.
 """
 
 
@@ -211,10 +222,38 @@ aura_tools = types.Tool(
 
 
 # ==========================================
+# CONVERSATION MEMORY
+# ==========================================
+
+conversation_history = []
+
+
+# ==========================================
 # AURA BRAIN
 # ==========================================
 
 def ask_aura(user_message):
+
+    global conversation_history
+
+    # Add the new user message
+    conversation_history.append(
+        {
+            "role": "user",
+            "text": user_message
+        }
+    )
+
+    # Build context for Gemini
+    context_parts = []
+
+    for message in conversation_history:
+
+        context_parts.append(
+            f"{message['role'].upper()}: {message['text']}"
+        )
+
+    conversation_context = "\n".join(context_parts)
 
     max_retries = 3
 
@@ -224,12 +263,18 @@ def ask_aura(user_message):
 
             response = client.models.generate_content(
                 model="gemini-flash-latest",
-                contents=user_message,
+
+                contents=conversation_context,
+
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_PROMPT,
                     tools=[aura_tools]
                 )
             )
+
+            # ==================================
+            # CHECK FOR TOOL CALL
+            # ==================================
 
             for candidate in response.candidates:
 
@@ -242,17 +287,55 @@ def ask_aura(user_message):
                         tool_name = function_call.name
                         arguments = dict(function_call.args)
 
-                        print(f"\nAURA TOOL → {tool_name}")
-                        print(f"Arguments → {arguments}")
+                        print(
+                            f"\nAURA TOOL → {tool_name}"
+                        )
 
+                        print(
+                            f"Arguments → {arguments}"
+                        )
+
+                        # Execute actual Python tool
                         result = execute_tool(
                             tool_name,
                             arguments
                         )
 
+                        # Store the tool action in memory
+                        conversation_history.append(
+                            {
+                                "role": "assistant",
+                                "text": (
+                                    f"Used tool {tool_name} "
+                                    f"with arguments {arguments}."
+                                )
+                            }
+                        )
+
+                        # Store the tool result in memory
+                        conversation_history.append(
+                            {
+                                "role": "tool",
+                                "text": str(result)
+                            }
+                        )
+
                         return result
 
-            return response.text
+            # ==================================
+            # NORMAL GEMINI RESPONSE
+            # ==================================
+
+            answer = response.text
+
+            conversation_history.append(
+                {
+                    "role": "assistant",
+                    "text": answer
+                }
+            )
+
+            return answer
 
         except Exception as e:
 
@@ -260,7 +343,7 @@ def ask_aura(user_message):
 
             # Retry temporary Gemini/server errors
             if "503" in error_text or "UNAVAILABLE" in error_text:
-                
+
                 if attempt < max_retries - 1:
 
                     wait_time = 2 ** attempt
@@ -284,14 +367,29 @@ def ask_aura(user_message):
 
 
 # ==========================================
+# CLEAR MEMORY
+# ==========================================
+
+def clear_memory():
+
+    global conversation_history
+
+    conversation_history = []
+
+    print("AURA: Conversation memory cleared.")
+
+
+# ==========================================
 # TEST MODE
 # ==========================================
 
 if __name__ == "__main__":
 
     print("================================")
-    print("     AURA AI - Full Tool Brain")
+    print("     AURA AI - Phase 4.1")
     print("================================")
+    print("Conversation Memory Enabled")
+    print("Type 'clear' to clear memory.")
     print("Type 'exit' to stop.")
     print("================================\n")
 
@@ -300,8 +398,14 @@ if __name__ == "__main__":
         user_input = input("You: ").strip()
 
         if user_input.lower() == "exit":
+
             print("AURA: Goodbye!")
             break
+
+        if user_input.lower() == "clear":
+
+            clear_memory()
+            continue
 
         if not user_input:
             continue
