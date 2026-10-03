@@ -226,7 +226,7 @@ aura_tools = types.Tool(
 # CONVERSATION MEMORY
 # ==========================================
 
-conversation_history = []
+conversation_history = load_memory()
 
 # ==========================================
 # AURA DEVICE STATE
