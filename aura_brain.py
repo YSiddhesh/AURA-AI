@@ -254,7 +254,7 @@ def ask_aura(user_message):
             "text": user_message
         }
     )
-
+    add_memory("user", user_message)
     # Build context for Gemini
     context_parts = []
 
@@ -371,6 +371,7 @@ def ask_aura(user_message):
                                 "text": answer
                             }
                         )
+                        add_memory("assistant", answer)
 
                         return answer
 
@@ -423,10 +424,11 @@ def ask_aura(user_message):
 # ==========================================
 
 def clear_memory():
-
     global conversation_history
 
     conversation_history = []
+
+    clear_persistent_memory()
 
     print("AURA: Conversation memory cleared.")
 
