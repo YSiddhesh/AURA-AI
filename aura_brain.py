@@ -432,7 +432,6 @@ def clear_memory():
 
     print("AURA: Conversation memory cleared.")
 
-
 # ==========================================
 # TEST MODE
 # ==========================================
