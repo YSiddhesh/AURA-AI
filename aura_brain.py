@@ -484,12 +484,28 @@ def ask_aura(user_message):
     Last action: {aura_state["last_action"]}
     """
 
-    conversation_context = (
-        state_context
-        + "\n\nCONVERSATION HISTORY:\n"
-        + conversation_context
-    )
+    # ==================================
+    # BUILD INTELLIGENT CONTEXT
+    # ==================================
 
+    conversation_context = f"""
+    CURRENT AURA STATE:
+    Last device: {aura_state["last_device"]}
+    Last app: {aura_state["last_app"]}
+    Last action: {aura_state["last_action"]}
+
+    RECENT CONVERSATION:
+    """
+
+    for message in conversation_history[-10:]:
+        conversation_context += (
+            f'{message["role"]}: {message["text"]}\n'
+        )
+
+    conversation_context += f"""
+    CURRENT USER REQUEST:
+    {user_message}
+    """
     max_retries = 3
 
     for attempt in range(max_retries):
