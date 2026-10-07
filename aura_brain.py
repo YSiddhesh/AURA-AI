@@ -627,13 +627,18 @@ def ask_aura(user_message):
 
                     aura_state["last_action"] = tool_name
 
+                    # Update device context when the tool explicitly uses a device
                     if "device" in arguments:
                         aura_state["last_device"] = arguments["device"]
 
+                    # Update app context when an Android app is opened
                     if tool_name == "open_android_app":
-                        aura_state["last_app"] = arguments.get(
-                            "app_name"
-                        )
+                        aura_state["last_app"] = arguments.get("app_name")
+
+                    # Clear app context when navigating away
+                    elif tool_name in ["android_home", "android_back"]:
+                        if tool_name == "android_home":
+                            aura_state["last_app"] = None
 
                     # ==================================
                     # CREATE FUNCTION RESPONSE
