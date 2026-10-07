@@ -334,107 +334,46 @@ def ask_aura(user_message):
             # TOOL LOOP
             # ==================================
 
+            contents = [
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_text(
+                            text=conversation_context
+                        )
+                    ]
+                )
+            ]
+
             while True:
 
-                function_found = False
+                response = client.models.generate_content(
+                    model="gemini-flash-latest",
+
+                    contents=contents,
+
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_PROMPT,
+                        tools=[aura_tools]
+                    )
+                )
+
+                function_calls = []
 
                 for candidate in response.candidates:
 
                     for part in candidate.content.parts:
 
                         if part.function_call:
-
-                            function_found = True
-
-                            function_call = part.function_call
-
-                            tool_name = function_call.name
-                            arguments = dict(function_call.args)
-
-                            print(
-                                f"\nAURA TOOL → {tool_name}"
+                            function_calls.append(
+                                part.function_call
                             )
-
-                            print(
-                                f"Arguments → {arguments}"
-                            )
-
-                            # Execute actual Python tool
-                            result = execute_tool(
-                                tool_name,
-                                arguments
-                            )
-
-                            print(
-                                f"Tool Result → {result}"
-                            )
-
-                            # ==================================
-                            # UPDATE AURA STATE
-                            # ==================================
-
-                            aura_state["last_action"] = tool_name
-
-                            if "device" in arguments:
-                                aura_state["last_device"] = arguments["device"]
-
-                            if tool_name == "open_android_app":
-                                aura_state["last_app"] = arguments.get(
-                                    "app_name"
-                                )
-
-                            # ==================================
-                            # SEND TOOL RESULT BACK TO GEMINI
-                            # ==================================
-
-                            tool_response = types.Part.from_function_response(
-                                name=tool_name,
-                                response={
-                                    "result": str(result)
-                                }
-                            )
-
-                            follow_up = client.models.generate_content(
-                                model="gemini-flash-latest",
-
-                                contents=[
-                                    types.Content(
-                                        role="user",
-                                        parts=[
-                                            types.Part.from_text(
-                                                text=conversation_context
-                                            )
-                                        ]
-                                    ),
-
-                                    response.candidates[0].content,
-
-                                    types.Content(
-                                        role="tool",
-                                        parts=[tool_response]
-                                    )
-                                ],
-
-                                config=types.GenerateContentConfig(
-                                    system_instruction=SYSTEM_PROMPT,
-                                    tools=[aura_tools]
-                                )
-                            )
-
-                            # Continue the loop using Gemini's
-                            # latest response
-                            response = follow_up
-
-                            break
-
-                    if function_found:
-                        break
 
                 # ==================================
-                # NO MORE TOOL CALLS
+                # NO MORE TOOLS → FINAL RESPONSE
                 # ==================================
 
-                if not function_found:
+                if not function_calls:
 
                     answer = response.text
 
@@ -452,6 +391,81 @@ def ask_aura(user_message):
 
                     return answer
 
+                # ==================================
+                # ADD GEMINI'S FUNCTION CALL
+                # ==================================
+
+                contents.append(
+                    response.candidates[0].content
+                )
+
+                # ==================================
+                # EXECUTE ALL REQUESTED TOOLS
+                # ==================================
+
+                function_response_parts = []
+
+                for function_call in function_calls:
+
+                    tool_name = function_call.name
+                    arguments = dict(function_call.args)
+
+                    print(
+                        f"\nAURA TOOL → {tool_name}"
+                    )
+
+                    print(
+                        f"Arguments → {arguments}"
+                    )
+
+                    # Execute actual Python tool
+                    result = execute_tool(
+                        tool_name,
+                        arguments
+                    )
+
+                    print(
+                        f"Tool Result → {result}"
+                    )
+
+                    # ==================================
+                    # UPDATE AURA STATE
+                    # ==================================
+
+                    aura_state["last_action"] = tool_name
+
+                    if "device" in arguments:
+                        aura_state["last_device"] = arguments["device"]
+
+                    if tool_name == "open_android_app":
+                        aura_state["last_app"] = arguments.get(
+                            "app_name"
+                        )
+
+                    # ==================================
+                    # CREATE FUNCTION RESPONSE
+                    # ==================================
+
+                    function_response_parts.append(
+                        types.Part.from_function_response(
+                            name=tool_name,
+                            response={
+                                "result": str(result)
+                            },
+                            id=function_call.id
+                        )
+                    )
+
+                # ==================================
+                # SEND TOOL RESULTS BACK TO GEMINI
+                # ==================================
+
+                contents.append(
+                    types.Content(
+                        role="user",
+                        parts=function_response_parts
+                    )
+                )
             # ==================================
             # NORMAL GEMINI RESPONSE
             # ==================================
