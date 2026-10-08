@@ -836,9 +836,9 @@ def ask_aura(user_message):
                     wait_time = 2 ** attempt
 
                     print(
-                        f"AURA: Gemini temporarily unavailable. "
-                        f"Retrying in {wait_time} seconds..."
-                    )
+                            f"AURA: Gemini service temporarily unavailable or rate limited. "
+                            f"Retrying in {wait_time} seconds..."
+                        )
 
                     time.sleep(wait_time)
 
