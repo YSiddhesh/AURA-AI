@@ -789,8 +789,7 @@ def ask_aura(user_message):
                             name=tool_name,
                             response={
                                 "result": str(result)
-                            },
-                            id=function_call.id
+                            }
                         )
                     )
 
