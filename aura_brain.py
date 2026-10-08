@@ -653,7 +653,7 @@ def ask_aura(user_message):
         try:
 
             response = client.models.generate_content(
-                model="gemini-flash-latest",
+                model="gemini-3.8-flash",
 
                 contents=conversation_context,
 
@@ -681,7 +681,7 @@ def ask_aura(user_message):
             while True:
 
                 response = client.models.generate_content(
-                    model="gemini-flash-latest",
+                    model="gemini-3.8-flash",
 
                     contents=contents,
 
