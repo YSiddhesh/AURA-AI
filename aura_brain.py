@@ -824,7 +824,12 @@ def ask_aura(user_message):
             error_text = str(e)
 
             # Retry temporary Gemini/server errors
-            if "503" in error_text or "UNAVAILABLE" in error_text:
+            if (
+                    "429" in error_text
+                    or "RESOURCE_EXHAUSTED" in error_text
+                    or "503" in error_text
+                    or "UNAVAILABLE" in error_text
+                ):
 
                 if attempt < max_retries - 1:
 
