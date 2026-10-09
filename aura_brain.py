@@ -350,6 +350,29 @@ Process:
 
 A successful previous action must not be assumed to guarantee that a later
 action will succeed.
+
+Mixed-device task planning:
+
+A single user request may involve the Windows laptop, phone 1, phone 2,
+or any combination of these devices.
+
+For each action:
+1. Identify the correct target device independently.
+2. Select the tool that supports the requested action on that device.
+3. Preserve the user's requested task order.
+4. Do not accidentally reuse the previous task's device for a new action
+   when the user specifies a different device.
+5. Use conversation context only when the target device is genuinely
+   omitted and can be resolved unambiguously.
+6. Never claim an action succeeded without checking its tool result.
+
+Available targets:
+- Windows laptop: Windows application and file tools.
+- phone 1: Android tools with device="phone1".
+- phone 2: Android tools with device="phone2".
+
+Do not assume that all actions in a multi-device request target the same
+device. Resolve the device for every action separately.
 ================================
 TOOL USAGE
 ================================
