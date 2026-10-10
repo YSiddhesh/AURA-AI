@@ -15,34 +15,70 @@ from android_control import (
 
 def execute_tool(tool_name, arguments):
     """
-    Execute an AURA tool using the existing Python functions.
+    Execute an AURA tool and classify execution failures.
     """
 
-    if tool_name == "open_windows_app":
-        return open_application(arguments["app_name"])
+    try:
+        if tool_name == "open_windows_app":
+            result = open_application(arguments["app_name"])
 
-    if tool_name == "open_file":
-        return open_file(arguments["file_name"])
+        elif tool_name == "open_file":
+            result = open_file(arguments["file_name"])
 
-    if tool_name == "lock_laptop":
-        return lock_laptop()
+        elif tool_name == "lock_laptop":
+            result = lock_laptop()
 
-    if tool_name == "open_android_app":
-        return open_android_app(
-            arguments["app_name"],
-            arguments["device"]
-        )
+        elif tool_name == "open_android_app":
+            result = open_android_app(
+                arguments["app_name"],
+                arguments["device"]
+            )
 
-    if tool_name == "android_home":
-        return android_home(arguments["device"])
+        elif tool_name == "android_home":
+            result = android_home(arguments["device"])
 
-    if tool_name == "android_back":
-        return android_back(arguments["device"])
+        elif tool_name == "android_back":
+            result = android_back(arguments["device"])
 
-    if tool_name == "get_battery_level":
-        return get_battery_level(arguments["device"])
+        elif tool_name == "get_battery_level":
+            result = get_battery_level(arguments["device"])
 
-    if tool_name == "get_device_info":
-        return get_device_info(arguments["device"])
+        elif tool_name == "get_device_info":
+            result = get_device_info(arguments["device"])
 
-    return "Unknown AURA tool."
+        else:
+            return {
+                "status": "failure",
+                "error_type": "unknown_tool",
+                "message": f"Unknown AURA tool: {tool_name}"
+            }
+
+        # Detect functions that explicitly return no result.
+        if result is None:
+            return {
+                "status": "failure",
+                "error_type": "empty_result",
+                "message": f"{tool_name} returned no result."
+            }
+
+        # Preserve the original result for AURA to inspect.
+        return {
+            "status": "success",
+            "tool": tool_name,
+            "result": result
+        }
+
+    except KeyError as error:
+        return {
+            "status": "failure",
+            "error_type": "missing_argument",
+            "message": f"Missing required argument: {error}"
+        }
+
+    except Exception as error:
+        return {
+            "status": "failure",
+            "error_type": "execution_error",
+            "message": str(error),
+            "tool": tool_name
+        }
