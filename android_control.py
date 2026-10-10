@@ -37,7 +37,14 @@ def open_android_app(app_name, device="phone1"):
     if not package_name:
         return f"Sorry, {app_name} is not in the approved Android app list."
 
-    run_adb(device, ["shell", "monkey", "-p", package_name, "1"])
+    result = run_adb(
+        device,
+        ["shell", "monkey", "-p", package_name, "1"]
+    )
+
+    if result.startswith("ADB Error:"):
+        return f"Failed to open {app_name} on {device}: {result}"
+
     return f"Sent command to open {app_name} on {device}."
 
 def get_battery_level(device="phone1"):
