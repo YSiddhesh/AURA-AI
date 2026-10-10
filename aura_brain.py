@@ -986,6 +986,9 @@ def ask_aura(user_message):
 
             error_text = str(e)
 
+            print(f"AURA DEBUG — Gemini/API error: {error_text}")
+            print(f"AURA DEBUG — Recorded tool results: {len(tool_results)}")
+
             # Identify temporary Gemini/server errors.
             is_temporary_error = (
                 "429" in error_text
