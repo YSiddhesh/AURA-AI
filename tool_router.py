@@ -53,7 +53,8 @@ def execute_tool(tool_name, arguments):
                 "message": f"Unknown AURA tool: {tool_name}"
             }
 
-        # Detect functions that explicitly return no result.
+            
+        # Detect empty results.
         if result is None:
             return {
                 "status": "failure",
@@ -61,12 +62,33 @@ def execute_tool(tool_name, arguments):
                 "message": f"{tool_name} returned no result."
             }
 
-        # Preserve the original result for AURA to inspect.
+        # Detect failures reported as text by control functions.
+        if isinstance(result, str):
+            failure_phrases = [
+                "not available",
+                "not found",
+                "failed",
+                "failure",
+                "error",
+                "unable to",
+                "could not"
+            ]
+
+            if any(phrase in result.lower() for phrase in failure_phrases):
+                return {
+                    "status": "failure",
+                    "error_type": "tool_failure",
+                    "tool": tool_name,
+                    "message": result
+                }
+
+        # Return successful results.
         return {
             "status": "success",
             "tool": tool_name,
             "result": result
         }
+
 
     except KeyError as error:
         return {
