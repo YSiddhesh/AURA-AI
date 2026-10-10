@@ -981,38 +981,87 @@ def ask_aura(user_message):
 
             return answer
 
+        
         except Exception as e:
 
             error_text = str(e)
 
-            # Retry temporary Gemini/server errors
-            if (
-                    "429" in error_text
-                    or "RESOURCE_EXHAUSTED" in error_text
-                    or "503" in error_text
-                    or "UNAVAILABLE" in error_text
-                ):
+            # Identify temporary Gemini/server errors.
+            is_temporary_error = (
+                "429" in error_text
+                or "RESOURCE_EXHAUSTED" in error_text
+                or "503" in error_text
+                or "UNAVAILABLE" in error_text
+            )
 
-                if attempt < max_retries - 1:
+            if not is_temporary_error:
+                raise
 
-                    wait_time = 2 ** attempt
+            # If tools have already executed, preserve their results
+            # instead of restarting the request and repeating actions.
+            if tool_results:
 
-                    print(
-                            f"AURA: Gemini service temporarily unavailable or rate limited. "
-                            f"Retrying in {wait_time} seconds..."
+                outcome_lines = []
+
+                for tool_name, result in tool_results:
+
+                    if isinstance(result, dict):
+                        if result.get("status") == "failure":
+                            outcome_lines.append(
+                                f"- {tool_name}: FAILED — "
+                                f"{result.get('message', 'Tool failed.')}"
+                            )
+
+                        elif result.get("status") == "success":
+                            outcome_lines.append(
+                                f"- {tool_name}: "
+                                f"{result.get('result', 'Completed.')}"
+                            )
+
+                        else:
+                            outcome_lines.append(
+                                f"- {tool_name}: {result}"
+                            )
+
+                    else:
+                        outcome_lines.append(
+                            f"- {tool_name}: {result}"
                         )
 
-                    time.sleep(wait_time)
+                answer = (
+                    "Gemini became unavailable after AURA executed "
+                    "the following action(s):\n"
+                    + "\n".join(outcome_lines)
+                )
 
-                else:
+                conversation_history.append({
+                    "role": "assistant",
+                    "text": answer
+                })
 
-                    return (
-                        "Gemini is temporarily unavailable. "
-                        "Please try again."
-                    )
+                add_memory("assistant", answer)
+
+                return answer
+
+            # No tool has executed yet, so retrying is safe.
+            if attempt < max_retries - 1:
+
+                wait_time = 2 ** attempt
+
+                print(
+                    "AURA: Gemini service temporarily unavailable "
+                    "or rate limited. "
+                    f"Retrying in {wait_time} seconds..."
+                )
+
+                time.sleep(wait_time)
 
             else:
-                raise
+                return (
+                    "Gemini is temporarily unavailable. "
+                    "Please try again."
+                )
+
 
 
 # ==========================================
