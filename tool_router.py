@@ -64,6 +64,7 @@ def execute_tool(tool_name, arguments):
 
         # Detect failures reported as text by control functions.
         if isinstance(result, str):
+            
             failure_phrases = [
                 "not available",
                 "not found",
@@ -71,8 +72,12 @@ def execute_tool(tool_name, arguments):
                 "failure",
                 "error",
                 "unable to",
-                "could not"
+                "could not",
+                "adb error",
+                "not configured",
+                "not in the approved"
             ]
+
 
             if any(phrase in result.lower() for phrase in failure_phrases):
                 return {
