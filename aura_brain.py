@@ -921,9 +921,8 @@ def ask_aura(user_message):
                         arguments
                     )
 
-                    print(
-                        f"Tool Result → {result}"
-                    )
+                    tool_results.append((tool_name, result))
+
 
                     # ==================================
                     # UPDATE AURA STATE
