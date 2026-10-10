@@ -805,9 +805,14 @@ def ask_aura(user_message):
     CURRENT USER REQUEST:
     {user_message}
     """
+
+    # Preserve actual tool results if Gemini fails later.
+    tool_results = []
+
     max_retries = 3
 
     for attempt in range(max_retries):
+
 
         try:
 
@@ -1065,4 +1070,3 @@ if __name__ == "__main__":
 
             print("AURA Error:", e)
 
-            
