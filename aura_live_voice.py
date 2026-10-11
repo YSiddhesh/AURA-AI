@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
+from tool_router import execute_tool
+
 load_dotenv()
 
 MODEL = "gemini-3.8-live"
@@ -15,9 +17,113 @@ BLOCK_SIZE = 1024
 
 client = genai.Client()
 
+DEVICE_SCHEMA = {
+    "type": "STRING",
+    "enum": ["phone1", "phone2"],
+}
+
+AURA_TOOLS = [{
+    "function_declarations": [
+        {
+            "name": "open_windows_app",
+            "description": "Open an approved application on Windows.",
+            "parameters": {
+                "type": "OBJECT",
+                "properties": {
+                    "app_name": {
+                        "type": "STRING",
+                        "enum": ["notepad", "calculator", "paint"],
+                    }
+                },
+                "required": ["app_name"],
+            },
+        },
+        {
+            "name": "open_file",
+            "description": "Open a file by its exact filename.",
+            "parameters": {
+                "type": "OBJECT",
+                "properties": {
+                    "file_name": {"type": "STRING"},
+                },
+                "required": ["file_name"],
+            },
+        },
+        {
+            "name": "lock_laptop",
+            "description": "Lock the Windows laptop.",
+            "parameters": {"type": "OBJECT", "properties": {}},
+        },
+        {
+            "name": "open_android_app",
+            "description": "Open an approved Android app on a specified phone.",
+            "parameters": {
+                "type": "OBJECT",
+                "properties": {
+                    "app_name": {
+                        "type": "STRING",
+                        "enum": ["youtube", "chrome", "whatsapp", "settings"],
+                    },
+                    "device": DEVICE_SCHEMA,
+                },
+                "required": ["app_name", "device"],
+            },
+        },
+        {
+            "name": "android_home",
+            "description": "Return the specified Android phone to its home screen.",
+            "parameters": {
+                "type": "OBJECT",
+                "properties": {"device": DEVICE_SCHEMA},
+                "required": ["device"],
+            },
+        },
+        {
+            "name": "android_back",
+            "description": "Press Back on the specified Android phone.",
+            "parameters": {
+                "type": "OBJECT",
+                "properties": {"device": DEVICE_SCHEMA},
+                "required": ["device"],
+            },
+        },
+        {
+            "name": "get_battery_level",
+            "description": "Check the battery percentage of an Android phone.",
+            "parameters": {
+                "type": "OBJECT",
+                "properties": {"device": DEVICE_SCHEMA},
+                "required": ["device"],
+            },
+        },
+        {
+            "name": "get_device_info",
+            "description": "Get the manufacturer and model of an Android phone.",
+            "parameters": {
+                "type": "OBJECT",
+                "properties": {"device": DEVICE_SCHEMA},
+                "required": ["device"],
+            },
+        },
+    ]
+}]
+
+
+SYSTEM_INSTRUCTION = """
+You are AURA, a natural conversational voice assistant.
+
+Listen continuously and respond naturally without requiring a wake phrase.
+Use the available tools when the user requests device actions or information.
+Use only phone1 and phone2 as internal device identifiers.
+Interpret "phone 1", "phone one", "phone 2", and "phone two" correctly.
+Never invent a tool result or claim an action succeeded when it failed.
+Explain tool failures clearly and concisely.
+For multi-step requests, perform the requested actions in order.
+Only use the applications and functions exposed by the tools.
+"""
+
 
 async def send_microphone(session):
-    """Continuously stream microphone audio to Gemini."""
     print("Microphone active. Speak naturally.")
 
     with sd.RawInputStream(
@@ -28,7 +134,7 @@ async def send_microphone(session):
     ) as microphone:
 
         while True:
-            audio_chunk, overflowed = await asyncio.to_thread(
+            audio_chunk, _ = await asyncio.to_thread(
                 microphone.read, BLOCK_SIZE
             )
 
@@ -40,9 +146,8 @@ async def send_microphone(session):
             )
 
 
-async def receive_audio(session):
-    """Play Gemini's spoken responses and print transcriptions."""
-    print("AURA is listening. Press Ctrl+C to stop.")
+async def receive_responses(session):
+    print("AURA is listening continuously. Press Ctrl+C to stop.")
 
     with sd.RawOutputStream(
         samplerate=OUTPUT_RATE,
@@ -50,29 +155,81 @@ async def receive_audio(session):
         dtype="int16",
     ) as speakers:
 
-        async for message in session.receive():
-            content = message.server_content
+        while True:
+            input_chunks = []
+            output_chunks = []
 
-            if content is None:
-                continue
+            async for message in session.receive():
 
-            if content.input_transcription:
-                text = content.input_transcription.text
-                if text:
-                    print(f"\nYou: {text}")
+                # Handle requested tool calls.
+                if message.tool_call:
+                    function_responses = []
 
-            if content.output_transcription:
-                text = content.output_transcription.text
-                if text:
-                    print(f"AURA: {text}", end="", flush=True)
+                    for call in message.tool_call.function_calls:
+                        tool_name = call.name
+                        arguments = dict(call.args or {})
 
-            if content.model_turn:
-                for part in content.model_turn.parts:
-                    if part.inline_data and part.inline_data.data:
-                        speakers.write(part.inline_data.data)
+                        print(f"\nAURA TOOL -> {tool_name}")
+                        print(f"Arguments -> {arguments}")
 
-            if content.turn_complete:
-                print("\n")
+                        try:
+                            result = await asyncio.to_thread(
+                                execute_tool,
+                                tool_name,
+                                arguments,
+                            )
+                        except Exception as error:
+                            result = {
+                                "status": "failure",
+                                "message": str(error),
+                            }
+
+                        print(f"Tool Result -> {result}")
+
+                        function_responses.append(
+                            types.FunctionResponse(
+                                id=call.id,
+                                name=tool_name,
+                                response={"result": str(result)},
+                            )
+                        )
+
+                    await session.send_tool_response(
+                        function_responses=function_responses
+                    )
+
+                content = message.server_content
+
+                if content is None:
+                    continue
+
+                if content.input_transcription:
+                    text = content.input_transcription.text
+                    if text:
+                        input_chunks.append(text)
+
+                if content.output_transcription:
+                    text = content.output_transcription.text
+                    if text:
+                        output_chunks.append(text)
+
+                if content.model_turn:
+                    for part in content.model_turn.parts:
+                        if part.inline_data and part.inline_data.data:
+                            await asyncio.to_thread(
+                                speakers.write,
+                                part.inline_data.data,
+                            )
+
+                if content.turn_complete:
+                    if input_chunks:
+                        print("\nYou:", "".join(input_chunks))
+
+                    if output_chunks:
+                        print("AURA:", "".join(output_chunks))
+
+                    print()
+                    break
 
 
 async def main():
@@ -80,11 +237,8 @@ async def main():
         "response_modalities": ["AUDIO"],
         "input_audio_transcription": {},
         "output_audio_transcription": {},
-        "system_instruction": (
-            "You are AURA, a helpful voice assistant. "
-            "Listen carefully, respond naturally and concisely, "
-            "and speak as if having a live conversation."
-        ),
+        "system_instruction": SYSTEM_INSTRUCTION,
+        "tools": AURA_TOOLS,
     }
 
     print("Connecting to Gemini Live...")
@@ -97,7 +251,7 @@ async def main():
 
         tasks = [
             asyncio.create_task(send_microphone(session)),
-            asyncio.create_task(receive_audio(session)),
+            asyncio.create_task(receive_responses(session)),
         ]
 
         try:
