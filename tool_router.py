@@ -1,3 +1,4 @@
+from app_discovery import open_app_on_device
 from windows_control import (
     open_application,
     open_file,
