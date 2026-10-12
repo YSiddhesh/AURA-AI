@@ -54,7 +54,13 @@ def execute_tool(tool_name, arguments):
                 "message": f"Unknown AURA tool: {tool_name}"
             }
 
-            
+        if tool_name == "open_app_on_device":
+            return open_app_on_device(
+                arguments["app_name"],
+                arguments["device"]
+            )
+
+        
         # Detect empty results.
         if result is None:
             return {
