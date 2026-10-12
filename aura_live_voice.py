@@ -24,6 +24,8 @@ DEVICE_SCHEMA = {
 
 AURA_TOOLS = [{
     "function_declarations": [
+
+
         {
             "name": "open_windows_app",
             "description": "Open an approved application on Windows.",
@@ -105,6 +107,36 @@ AURA_TOOLS = [{
                 "required": ["device"],
             },
         },
+
+        
+{
+    "name": "open_app_on_device",
+    "description": (
+        "Search for an application on the specifically requested "
+        "device and open it if found. Use this for application names "
+        "that are not covered by the existing predefined app tools. "
+        "Never switch to another device if the app is missing."
+    ),
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "app_name": {
+                "type": "STRING",
+                "description": "The application name spoken by the user."
+            },
+            "device": {
+                "type": "STRING",
+                "enum": ["windows", "phone1", "phone2"],
+                "description": (
+                    "The exact target: windows for laptop, "
+                    "phone1 for phone 1, phone2 for phone 2."
+                )
+            }
+        },
+        "required": ["app_name", "device"]
+    }
+}
+
     ]
 }]
 
