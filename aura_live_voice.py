@@ -1,4 +1,3 @@
-
 import asyncio
 
 import sounddevice as sd
@@ -24,8 +23,6 @@ DEVICE_SCHEMA = {
 
 AURA_TOOLS = [{
     "function_declarations": [
-
-
         {
             "name": "open_windows_app",
             "description": "Open an approved application on Windows.",
@@ -107,36 +104,33 @@ AURA_TOOLS = [{
                 "required": ["device"],
             },
         },
-
-        
-{
-    "name": "open_app_on_device",
-    "description": (
-        "Search for an application on the specifically requested "
-        "device and open it if found. Use this for application names "
-        "that are not covered by the existing predefined app tools. "
-        "Never switch to another device if the app is missing."
-    ),
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "app_name": {
-                "type": "STRING",
-                "description": "The application name spoken by the user."
+        {
+            "name": "open_app_on_device",
+            "description": (
+                "Search for an application on the specifically requested "
+                "device and open it if found. Use this for application names "
+                "that are not covered by the existing predefined app tools. "
+                "Never switch to another device if the app is missing."
+            ),
+            "parameters": {
+                "type": "OBJECT",
+                "properties": {
+                    "app_name": {
+                        "type": "STRING",
+                        "description": "The application name spoken by the user.",
+                    },
+                    "device": {
+                        "type": "STRING",
+                        "enum": ["windows", "phone1", "phone2"],
+                        "description": (
+                            "The exact target: windows for laptop, "
+                            "phone1 for phone 1, phone2 for phone 2."
+                        ),
+                    },
+                },
+                "required": ["app_name", "device"],
             },
-            "device": {
-                "type": "STRING",
-                "enum": ["windows", "phone1", "phone2"],
-                "description": (
-                    "The exact target: windows for laptop, "
-                    "phone1 for phone 1, phone2 for phone 2."
-                )
-            }
         },
-        "required": ["app_name", "device"]
-    }
-}
-
     ]
 }]
 
@@ -146,10 +140,14 @@ You are AURA, a natural conversational voice assistant.
 
 Listen continuously and respond naturally without requiring a wake phrase.
 Use the available tools when the user requests device actions or information.
-Use only phone1 and phone2 as internal device identifiers.
+Use only phone1 and phone2 as internal Android device identifiers.
 Interpret "phone 1", "phone one", "phone 2", and "phone two" correctly.
-Never invent a tool result or claim an action succeeded when it failed.
-Explain tool failures clearly and concisely.
+For apps covered by predefined tools, use those tools. For other app names,
+use open_app_on_device and specify the exact requested target:
+windows for the laptop, phone1 for phone 1, or phone2 for phone 2.
+Never silently switch to another device if an app is missing or a device is
+unavailable. Never invent a tool result or claim an action succeeded when it
+failed. Explain tool failures clearly and concisely.
 For multi-step requests, perform the requested actions in order.
 Only use the applications and functions exposed by the tools.
 """
