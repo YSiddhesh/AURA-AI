@@ -2,7 +2,7 @@ from app_discovery import open_app_on_device
 from windows_control import (
     open_application,
     open_file,
-    lock_laptop
+    lock_laptop,
 )
 
 from android_control import (
@@ -10,7 +10,7 @@ from android_control import (
     android_home,
     android_back,
     get_battery_level,
-    get_device_info
+    get_device_info,
 )
 
 
@@ -32,7 +32,13 @@ def execute_tool(tool_name, arguments):
         elif tool_name == "open_android_app":
             result = open_android_app(
                 arguments["app_name"],
-                arguments["device"]
+                arguments["device"],
+            )
+
+        elif tool_name == "open_app_on_device":
+            result = open_app_on_device(
+                arguments["app_name"],
+                arguments["device"],
             )
 
         elif tool_name == "android_home":
@@ -51,27 +57,30 @@ def execute_tool(tool_name, arguments):
             return {
                 "status": "failure",
                 "error_type": "unknown_tool",
-                "message": f"Unknown AURA tool: {tool_name}"
+                "message": f"Unknown AURA tool: {tool_name}",
             }
 
-        if tool_name == "open_app_on_device":
-            return open_app_on_device(
-                arguments["app_name"],
-                arguments["device"]
-            )
-
-        
         # Detect empty results.
         if result is None:
             return {
                 "status": "failure",
                 "error_type": "empty_result",
-                "message": f"{tool_name} returned no result."
+                "message": f"{tool_name} returned no result.",
             }
+
+        # Preserve structured failure results returned by a tool.
+        if isinstance(result, dict):
+            if result.get("success") is False or result.get("status") == "failure":
+                return {
+                    "status": "failure",
+                    "error_type": "tool_failure",
+                    "tool": tool_name,
+                    "message": result.get("message", str(result)),
+                    "result": result,
+                }
 
         # Detect failures reported as text by control functions.
         if isinstance(result, str):
-            
             failure_phrases = [
                 "not available",
                 "not found",
@@ -82,31 +91,29 @@ def execute_tool(tool_name, arguments):
                 "could not",
                 "adb error",
                 "not configured",
-                "not in the approved"
+                "not in the approved",
             ]
-
 
             if any(phrase in result.lower() for phrase in failure_phrases):
                 return {
                     "status": "failure",
                     "error_type": "tool_failure",
                     "tool": tool_name,
-                    "message": result
+                    "message": result,
                 }
 
         # Return successful results.
         return {
             "status": "success",
             "tool": tool_name,
-            "result": result
+            "result": result,
         }
-
 
     except KeyError as error:
         return {
             "status": "failure",
             "error_type": "missing_argument",
-            "message": f"Missing required argument: {error}"
+            "message": f"Missing required argument: {error}",
         }
 
     except Exception as error:
@@ -114,5 +121,5 @@ def execute_tool(tool_name, arguments):
             "status": "failure",
             "error_type": "execution_error",
             "message": str(error),
-            "tool": tool_name
+            "tool": tool_name,
         }
