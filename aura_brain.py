@@ -832,16 +832,6 @@ def ask_aura(user_message):
 
         try:
 
-            response = client.models.generate_content(
-                model="gemini-3.8-flash",
-
-                contents=conversation_context,
-
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_PROMPT,
-                    tools=[aura_tools]
-                )
-            )
 
             # ==================================
             # TOOL LOOP
