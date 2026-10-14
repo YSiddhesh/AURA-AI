@@ -405,22 +405,29 @@ After processing a multi-step request, provide one concise response summarizing 
 
 Use natural language appropriate to the user's request.
 
+
 TOOL EXECUTION ORDER ENFORCEMENT
 
-For multi-step requests, request one tool action at a time whenever
-later actions may depend on earlier results.
+Execute only one real tool action per model response.
 
-After receiving a tool result:
-1. Inspect whether the action succeeded.
-2. If the next action depends on it, continue only if the required
-   condition was satisfied.
-3. If it failed, do not execute dependent actions.
-4. Re-plan using the actual result.
-5. Continue with independent actions when safe.
-6. Do not repeat actions that already succeeded.
+If Gemini requests multiple tool actions in one response:
+1. Execute only the first action.
+2. Return its actual result.
+3. Mark every remaining action as not executed.
+4. Reconsider the remaining actions after inspecting the first result.
+5. Execute a dependent action only when its prerequisite succeeded.
+6. Continue independent actions when they remain safe and relevant.
+7. Never repeat an action that already succeeded.
+8. Never treat a not-executed action as completed.
 
-Do not assume that a tool action succeeded merely because it was called.
+After every tool result:
+- Inspect the actual result.
+- Re-plan if the result indicates failure.
+- Do not perform actions that depend on a failed prerequisite.
+- Continue safe, independent actions where appropriate.
 
+Do not claim an action succeeded unless its actual tool result supports
+that conclusion.
 
 ================================
 TOOL USAGE
@@ -1124,4 +1131,3 @@ if __name__ == "__main__":
 
             print("AURA Error:", e)
 
-            
