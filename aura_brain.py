@@ -405,6 +405,22 @@ After processing a multi-step request, provide one concise response summarizing 
 
 Use natural language appropriate to the user's request.
 
+TOOL EXECUTION ORDER ENFORCEMENT
+
+For multi-step requests, request one tool action at a time whenever
+later actions may depend on earlier results.
+
+After receiving a tool result:
+1. Inspect whether the action succeeded.
+2. If the next action depends on it, continue only if the required
+   condition was satisfied.
+3. If it failed, do not execute dependent actions.
+4. Re-plan using the actual result.
+5. Continue with independent actions when safe.
+6. Do not repeat actions that already succeeded.
+
+Do not assume that a tool action succeeded merely because it was called.
+
 
 ================================
 TOOL USAGE
