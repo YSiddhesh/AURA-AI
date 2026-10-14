@@ -868,101 +868,127 @@ def ask_aura(user_message):
                     )
                 )
 
-                function_calls = []
+                
+                # ==================================
+                # EXTRACT TOOL CALLS
+                # ==================================
 
-                for candidate in response.candidates:
+                if not response.candidates:
+                    raise RuntimeError(
+                        "Gemini returned no response candidates."
+                    )
 
-                    for part in candidate.content.parts:
+                # Use the same candidate for both extracting calls
+                # and appending the assistant response to contents.
+                candidate_content = response.candidates[0].content
 
-                        if part.function_call:
-                            function_calls.append(
-                                part.function_call
-                            )
+                function_calls = [
+                    part.function_call
+                    for part in candidate_content.parts
+                    if part.function_call is not None
+                ]
 
                 # ==================================
                 # NO MORE TOOLS → FINAL RESPONSE
                 # ==================================
 
                 if not function_calls:
-
-                    answer = response.text
-
-                    conversation_history.append(
-                        {
-                            "role": "assistant",
-                            "text": answer
-                        }
+                    answer = response.text or (
+                        "I could not generate a response."
                     )
 
-                    add_memory(
-                        "assistant",
-                        answer
-                    )
+                    conversation_history.append({
+                        "role": "assistant",
+                        "text": answer
+                    })
 
+                    add_memory("assistant", answer)
                     return answer
 
                 # ==================================
-                # ADD GEMINI'S FUNCTION CALL
+                # RECORD GEMINI'S FUNCTION CALLS
                 # ==================================
 
-                contents.append(
-                    response.candidates[0].content
-                )
+                contents.append(candidate_content)
 
                 # ==================================
-                # EXECUTE ALL REQUESTED TOOLS
+                # SEQUENTIAL TOOL EXECUTION GUARD
                 # ==================================
 
                 function_response_parts = []
 
-                for function_call in function_calls:
+                # Execute at most one real action from this response.
+                # Gemini can reconsider the remaining actions after
+                # receiving the actual result.
+                for index, function_call in enumerate(function_calls):
 
                     tool_name = function_call.name
                     arguments = dict(function_call.args)
 
-                    print(
-                        f"\nAURA TOOL → {tool_name}"
-                    )
+                    if index == 0:
+                        print(f"\nAURA TOOL → {tool_name}")
+                        print(f"Arguments → {arguments}")
 
-                    print(
-                        f"Arguments → {arguments}"
-                    )
+                        result = execute_tool(tool_name, arguments)
 
-                    # Execute actual Python tool
-                    result = execute_tool(
-                        tool_name,
-                        arguments
-                    )
+                        # Store only actions that were actually executed.
+                        tool_results.append((tool_name, result))
 
-                    tool_results.append((tool_name, result))
+                        print(f"Tool Result → {result}")
 
-                    # ==================================
-                    # UPDATE AURA STATE ONLY ON SUCCESS
-                    # ==================================
+                        # Update state only when execution succeeded.
+                        if (
+                            isinstance(result, dict)
+                            and result.get("status") == "success"
+                        ):
+                            aura_state["last_action"] = tool_name
 
-                    if isinstance(result, dict) and result.get("status") == "success":
+                            if "device" in arguments:
+                                aura_state["last_device"] = (
+                                    arguments["device"]
+                                )
 
-                        aura_state["last_action"] = tool_name
+                            if tool_name in [
+                                "open_android_app",
+                                "open_app_on_device"
+                            ]:
+                                aura_state["last_app"] = (
+                                    arguments.get("app_name")
+                                )
 
-                        if "device" in arguments:
-                            aura_state["last_device"] = arguments["device"]
+                            elif tool_name == "android_home":
+                                aura_state["last_app"] = None
 
-                        if tool_name in ["open_android_app", "open_app_on_device"]:
-                            aura_state["last_app"] = arguments.get("app_name")
+                        response_result = {
+                            "result": str(result)
+                        }
 
-                        elif tool_name == "android_home":
-                            aura_state["last_app"] = None
+                    else:
+                        # This action was requested by Gemini but
+                        # deliberately not executed in this turn.
+                        print(
+                            "AURA SAFEGUARD → Deferred tool action:",
+                            tool_name,
+                            arguments
+                        )
 
-                    # ==================================
-                    # CREATE FUNCTION RESPONSE
-                    # ==================================
+                        response_result = {
+                            "result": str({
+                                "status": "not_executed",
+                                "tool": tool_name,
+                                "message": (
+                                    "This action was not executed. "
+                                    "Inspect the previous tool result, "
+                                    "then decide whether this action "
+                                    "is still required and safe."
+                                )
+                            })
+                        }
 
                     function_response_parts.append(
                         types.Part.from_function_response(
                             name=tool_name,
-                            response={
-                                "result": str(result)
-                            }
+                            response=response_result
                         )
                     )
 
@@ -976,6 +1002,7 @@ def ask_aura(user_message):
                         parts=function_response_parts
                     )
                 )
+
             # ==================================
             # NORMAL GEMINI RESPONSE
             # ==================================
