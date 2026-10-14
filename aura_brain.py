@@ -929,24 +929,21 @@ def ask_aura(user_message):
 
                     tool_results.append((tool_name, result))
 
-
                     # ==================================
-                    # UPDATE AURA STATE
+                    # UPDATE AURA STATE ONLY ON SUCCESS
                     # ==================================
 
-                    aura_state["last_action"] = tool_name
+                    if isinstance(result, dict) and result.get("status") == "success":
 
-                    # Update device context when the tool explicitly uses a device
-                    if "device" in arguments:
-                        aura_state["last_device"] = arguments["device"]
+                        aura_state["last_action"] = tool_name
 
-                    # Update app context when an Android app is opened
-                    if tool_name == "open_android_app":
-                        aura_state["last_app"] = arguments.get("app_name")
+                        if "device" in arguments:
+                            aura_state["last_device"] = arguments["device"]
 
-                    # Clear app context when navigating away
-                    elif tool_name in ["android_home", "android_back"]:
-                        if tool_name == "android_home":
+                        if tool_name in ["open_android_app", "open_app_on_device"]:
+                            aura_state["last_app"] = arguments.get("app_name")
+
+                        elif tool_name == "android_home":
                             aura_state["last_app"] = None
 
                     # ==================================
