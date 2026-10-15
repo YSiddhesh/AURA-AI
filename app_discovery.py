@@ -314,3 +314,5 @@ if __name__ == "__main__":
     target = input("Device (windows/phone1/phone2): ").strip()
 
     print(open_app_on_device(app, target))
+
+
