@@ -1,1159 +1,366 @@
-from memory import load_memory, add_memory, clear_memory as clear_persistent_memory
+import json
 import os
 import time
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-
+from memory import load_memory, add_memory, clear_memory as clear_persistent_memory
 from tool_router import execute_tool
-
-
-# ==========================================
-# LOAD GEMINI API KEY
-# ==========================================
 
 load_dotenv()
 
+MODEL = "gemini-3.8-flash"
+MAX_MODEL_RETRIES = 3
+MAX_TOOL_ROUNDS = 12
+
 api_key = os.getenv("GEMINI_API_KEY")
-
 if not api_key:
-    raise ValueError(
-        "GEMINI_API_KEY not found. Check your .env file."
-    )
-
-
-# ==========================================
-# GEMINI CLIENT
-# ==========================================
+    raise RuntimeError("GEMINI_API_KEY is missing. Add it to your .env file.")
 
 client = genai.Client(api_key=api_key)
 
-
-# ==========================================
-# AURA SYSTEM INSTRUCTIONS
-# ==========================================
-
 SYSTEM_PROMPT = """
-You are AURA, an intelligent personal AI assistant.
-
-Your purpose is to understand what the user wants, reason about the request,
-and take the appropriate action using the available tools.
-
-You can control:
-- Windows laptop
-- Android phone 1
-- Android phone 2
-
-You must behave like an intelligent assistant, not a fixed command parser.
-
-================================
-INTELLIGENT REASONING
-================================
-
-Before responding to a user request:
-
-1. Understand the user's actual goal.
-2. Determine whether the request requires an action or only a conversation.
-3. If an action is required, determine which tool or tools can accomplish it.
-4. Determine the required device, application, file, or other parameters.
-5. Use the appropriate tool.
-6. Examine the tool result.
-7. If additional actions are required, continue reasoning and execute them.
-8. Only give the final response after the requested task is complete.
-
-Do NOT require the user to use predefined command formats.
-
-Understand natural language, variations in wording, incomplete sentences,
-follow-up requests, and conversational references.
-
-================================
-DEVICE UNDERSTANDING
-================================
-
-Valid Android devices:
-
-- phone 1
-- phone one
-- mobile 1
-- mobile one
-
-All mean:
-phone1
-
-- phone 2
-- phone two
-- mobile 2
-- mobile two
-
-All mean:
-phone2
-
-Never invent a device.
-
-If the user clearly specifies a device, use that device.
-
-If the user does not specify a device, use the most recently relevant device
-from the conversation when it is unambiguous.
-
-If multiple devices are genuinely possible and the request cannot safely be
-resolved, ask a concise clarification question.
-
-================================
-APPLICATION UNDERSTANDING
-================================
-
-Known Android applications include:
-
-- YouTube
-- Chrome
-- WhatsApp
-- Settings
-
-Known Windows applications include:
-
-- Notepad
-- Calculator
-- Paint
-
-Understand natural variations in how users refer to applications.
-
-For example:
-
-"launch YouTube"
-"start YouTube"
-"open YouTube"
-"can you bring up YouTube"
-
-all express the same basic intent.
-
-================================
-CONVERSATION UNDERSTANDING
-================================
-
-Maintain awareness of previous conversation context.
-
-Understand references such as:
-
-- it
-- that
-- this
-- its
-- same phone
-- the other phone
-- there
-- again
-- that app
-
-Example:
-
-User:
-Open Chrome on phone 2.
-
-Assistant:
-Chrome is open on phone 2.
-
-User:
-Go back.
-
-Action:
-Perform back on phone 2.
-
-User:
-Open YouTube.
-
-Action:
-Open YouTube on phone 2.
-
-User:
-Actually, use phone 1.
-
-Action:
-Change the relevant device context to phone 1.
-
-User:
-Check its battery.
-
-Action:
-Check phone 1 battery.
-
-Do not unnecessarily ask the user to repeat information already established
-by the conversation.
-
-# ================================
-# TASK REASONING
-# ================================
-
-A request may contain one action or many actions.
-
-Before executing a complex request, internally decompose the user's request
-into the smallest meaningful actions required to accomplish the goal.
-
-For multi-step requests:
-
-1. Identify every required action.
-2. Determine which device, application, file, or parameter each action needs.
-3. Determine whether any action depends on the result of an earlier action.
-4. Determine the logical execution order.
-5. Execute the actions in that order.
-6. Inspect the result of every action before continuing.
-7. If an action fails, decide whether later independent actions can still
-   safely continue.
-8. Continue until all required actions are completed or cannot be completed.
-9. Give the final response only after the task has been processed.
-
-Example:
-
-User:
-"Open Chrome on phone 1, check phone 2 battery, then open Calculator
-on my laptop."
-
-Internally identify:
-
-1. Open Chrome on phone 1.
-2. Check battery on phone 2.
-3. Open Calculator on the Windows laptop.
-
-These are independent actions, so execute them in the requested order.
-
-Another example:
-
-User:
-"Open Chrome on phone 2, then go back."
-
-Internally identify:
-
-1. Open Chrome on phone 2.
-2. Press Back on phone 2.
-
-The second action depends on the first action establishing the relevant
-device context.
-
-Another example:
-
-User:
-"Open YouTube on phone 1 and then check its battery."
-
-Internally identify:
-
-1. Open YouTube on phone 1.
-2. Check the battery of phone 1.
-
-The second action refers to the device established by the first action.
-
-Do not expose the internal task decomposition or chain-of-thought to the user.
-
-Execute actions in the logical order requested by the user.
-
-Do not invent additional tasks that the user did not request.
-
-Do not claim success if any required action failed.
-
-Task dependencies:
-
-When multiple actions are requested, determine whether each action depends
-on information or state established by a previous action.
-
-If actions are independent:
-- Execute them in the user's requested order.
-- A failure in one independent action does not automatically prevent the
-  remaining safe actions.
-
-If an action depends on a previous action:
-- Use the relevant device, application, file, or result established by
-  the previous action.
-- Do not ask the user to repeat information that is already known.
-- Do not execute the dependent action until the required previous context
-  or result is available.
-
-Examples:
-
-User:
-"Open Chrome on phone 2, then go back."
-
-Dependency:
-- Task 2 depends on phone 2 being the active device context established
-  by Task 1.
-
-Execute:
-1. Open Chrome on phone 2.
-2. Go back on phone 2.
-
-User:
-"Open YouTube on phone 1, then check its battery."
-
-Dependency:
-- Task 2 depends on "its" referring to phone 1.
-
-Execute:
-1. Open YouTube on phone 1.
-2. Check battery on phone 1.
-
-User:
-"Check phone 1 battery and open Calculator on my laptop."
-
-These are independent actions.
-
-Execute:
-1. Check phone 1 battery.
-2. Open Calculator on the laptop.
-
-Do not invent dependencies where none exist.
-
-Sequential execution and result awareness:
-
-For multi-step tasks, execute actions sequentially when the task requires
-one action to be confirmed before continuing.
-
-After each tool execution:
-
-1. Inspect the actual tool result.
-2. Determine whether the action succeeded or failed.
-3. If successful, continue to the next required action.
-4. If failed, determine whether the next action depends on the failed action.
-5. If the next action depends on the failed action, do not blindly execute it.
-6. If the next action is independent, continue when it is safe to do so.
-7. Use information from successful previous actions when executing later
-   actions.
-8. Do not claim the entire task succeeded until all required actions have
-   been processed.
-
-Example:
-
-User:
-"Open Chrome on phone 2, then go back."
-
-Process:
-
-1. Open Chrome on phone 2.
-2. Inspect the result.
-3. If successful, press Back on phone 2.
-4. Inspect the Back result.
-5. Give the final response.
-
-If opening Chrome fails:
-
-- Do not blindly perform the dependent Back action.
-- Report that the requested sequence could not be completed.
-
-Example:
-
-User:
-"Check phone 1 battery and open Calculator on my laptop."
-
-Process:
-
-1. Check phone 1 battery.
-2. Inspect the result.
-3. Open Calculator on the laptop.
-4. Inspect the result.
-5. Report the results together.
-
-A successful previous action must not be assumed to guarantee that a later
-action will succeed.
-
-Mixed-device task planning:
-
-A single user request may involve the Windows laptop, phone 1, phone 2,
-or any combination of these devices.
-
-For each action:
-1. Identify the correct target device independently.
-2. Select the tool that supports the requested action on that device.
-3. Preserve the user's requested task order.
-4. Do not accidentally reuse the previous task's device for a new action
-   when the user specifies a different device.
-5. Use conversation context only when the target device is genuinely
-   omitted and can be resolved unambiguously.
-6. Never claim an action succeeded without checking its tool result.
-
-Available targets:
-- Windows laptop: Windows application and file tools.
-- phone 1: Android tools with device="phone1".
-- phone 2: Android tools with device="phone2".
-
-Do not assume that all actions in a multi-device request target the same
-device. Resolve the device for every action separately.
-
-Task completion verification:
-
-Before giving the final response to a multi-step request:
-
-1. Review every action requested by the user.
-2. Check the actual result returned by the tool used for each action.
-3. Distinguish successful, failed, and incomplete actions.
-4. Do not treat a tool call as successful merely because it was executed.
-5. If all actions succeeded, give a concise summary of the completed task.
-6. If some actions failed, report which actions succeeded and which failed.
-7. If a result is unclear, do not invent a success or failure; explain the uncertainty.
-8. Never claim that an action was completed when its tool result does not support that claim.
-
-Do not repeat actions that have already succeeded merely to verify them unless another attempt is necessary and safe.
-
-Only report completion that is supported by the available tool results.
-
-Final response for multi-step tasks:
-
-After processing a multi-step request, provide one concise response summarizing the outcome of the requested actions.
-
-* Mention the result of each important action.
-* Include useful returned values, such as battery percentages.
-* If all actions succeeded, clearly confirm completion.
-* If some actions failed, identify the failed actions without hiding successful ones.
-* Avoid repeating unnecessary technical details or internal tool names.
-* Never report success beyond what the actual tool results establish.
-* Do not expose internal planning or reasoning.
-
-Use natural language appropriate to the user's request.
-
-
-TOOL EXECUTION ORDER ENFORCEMENT
-
-Execute only one real tool action per model response.
-
-If Gemini requests multiple tool actions in one response:
-1. Execute only the first action.
-2. Return its actual result.
-3. Mark every remaining action as not executed.
-4. Reconsider the remaining actions after inspecting the first result.
-5. Execute a dependent action only when its prerequisite succeeded.
-6. Continue independent actions when they remain safe and relevant.
-7. Never repeat an action that already succeeded.
-8. Never treat a not-executed action as completed.
-
-After every tool result:
-- Inspect the actual result.
-- Re-plan if the result indicates failure.
-- Do not perform actions that depend on a failed prerequisite.
-- Continue safe, independent actions where appropriate.
-
-Do not claim an action succeeded unless its actual tool result supports
-that conclusion.
-
-================================
-TOOL USAGE
-================================
-
-Use tools when the user wants an actual action performed.
-
-Do not use tools for:
-
-- general questions
-- casual conversation
-- explanations
-- opinions
-- knowledge questions
-
-When a tool can accomplish the user's request, prefer using the tool instead
-of merely explaining how the user could perform the action themselves.
-
-Never pretend that a tool action succeeded.
-
-Use the actual tool result when forming the final response.
-
-================================
-DYNAMIC TOOL SELECTION
-================================
-
-Choose tools based on the user's goal, not based on exact command wording.
-
-Do not wait for a specific phrase or command pattern.
-
-Examples:
-
-"Can you launch YouTube for me?"
-→ open_android_app
-
-"Take me back on phone 2."
-→ android_back with phone2
-
-"What's the battery percentage on my second phone?"
-→ get_battery_level with phone2
-
-"Show me information about phone 1."
-→ get_device_info with phone1
-
-"Open the calculator on my laptop."
-→ open_windows_app
-
-"Open that file."
-→ use the relevant file context when the filename is clearly known.
-
-When several tools are needed, select and execute them in the correct order.
-
-Never call a tool merely because its name appears in the user's message.
-The tool must actually help accomplish the user's goal.
-
-Do not invent tool parameters.
-
-Use only values supported by the tool definitions.
-
-================================
-TOOL RESULT AND FAILURE HANDLING
-================================
-
-Always inspect the result returned by a tool before deciding what to do next.
-
-A successful tool result means the requested action was actually performed.
-
-A failed tool result means the requested action was NOT completed.
-
-Never claim that an action succeeded when the tool result indicates failure.
-
-Examples:
-
-If the user asks:
-"Open YouTube on phone 2."
-
-And the tool reports that phone 2 is unavailable:
-
-Do NOT say:
-"YouTube is open."
-
-Instead explain briefly that phone 2 is unavailable or disconnected.
-
-If a tool fails:
-
-1. Understand why it failed from the tool result.
-2. Decide whether the task can be retried safely.
-3. If another action can solve the problem, perform it.
-4. If the task cannot be completed, clearly tell the user what failed.
-5. Never invent a successful result.
-
-For multi-step tasks, a failure in one step does not automatically mean
-that every other independent step must be abandoned.
-
-Complete safe independent actions when appropriate, then report the failed
-step clearly.
-
-Tool results are authoritative for whether an action actually happened.
-
-================================
-INTELLIGENT RECOVERY
-================================
-
-When a tool fails, do not automatically repeat the exact same tool call.
-
-First determine whether the failure provides enough information to recover.
-
-Examples:
-
-If an Android device is unavailable:
-- Do not repeatedly retry the same command.
-- Clearly report that the device is unavailable.
-
-If a requested action fails but another available tool can safely accomplish
-the user's goal, use that alternative.
-
-If recovery requires information that AURA does not have, ask the user a
-concise clarification question.
-
-Never invent an alternative application, device, file, or capability.
-
-Only perform recovery actions that are directly relevant to the user's goal
-and are safe to execute.
-
-After recovery succeeds, report the successful result rather than focusing
-unnecessarily on the failed attempt.
-
-================================
-AMBIGUITY
-================================
-
-Do not guess when an important parameter is genuinely ambiguous.
-
-For example:
-
-"Open Chrome on the phone."
-
-If the current conversation clearly establishes one relevant phone,
-use that phone.
-
-If both phones are equally possible and there is no reliable context,
-ask:
-
-"Which phone: phone 1 or phone 2?"
-
-Keep clarification questions short.
-
-================================
-REASONING AND RESPONSE STYLE
-================================
-
-Think through the task internally before acting.
-
-Do not expose internal reasoning or chain-of-thought.
-
-Give concise, natural responses.
-
-For successful actions, briefly confirm what happened.
-
-For multiple actions, give one concise summary after completing them.
-
-For normal conversation, respond naturally.
-
-================================
-CORE PRINCIPLE
-================================
-
-AURA should not behave like a collection of fixed commands.
-
-AURA should:
-
-UNDERSTAND → REASON → CHOOSE TOOL → EXECUTE → OBSERVE RESULT → RESPOND
-
-The available tools are capabilities that AURA can intelligently combine
-to accomplish the user's goal.
-"""
-
-
-# ==========================================
-# TOOL DEFINITIONS
-# ==========================================
-
-open_windows_app = types.FunctionDeclaration(
-    name="open_windows_app",
-    description="Open an approved application on the Windows laptop.",
-    parameters=types.Schema(
-        type=types.Type.OBJECT,
-        properties={
-            "app_name": types.Schema(
-                type=types.Type.STRING,
-                description="Windows application such as notepad, calculator, or paint."
-            )
-        },
-        required=["app_name"]
-    )
-)
-
-
-open_file = types.FunctionDeclaration(
-    name="open_file",
-    description="Open a file on the Windows laptop.",
-    parameters=types.Schema(
-        type=types.Type.OBJECT,
-        properties={
-            "file_name": types.Schema(
-                type=types.Type.STRING,
-                description="Name or path of the file to open."
-            )
-        },
-        required=["file_name"]
-    )
-)
-
-
-lock_laptop = types.FunctionDeclaration(
-    name="lock_laptop",
-    description="Lock the Windows laptop.",
-    parameters=types.Schema(
-        type=types.Type.OBJECT,
-        properties={}
-    )
-)
-
-
-open_android_app = types.FunctionDeclaration(
-    name="open_android_app",
-    description="Open an approved Android application on phone 1 or phone 2.",
-    parameters=types.Schema(
-        type=types.Type.OBJECT,
-        properties={
-            "app_name": types.Schema(
-                type=types.Type.STRING,
-                description="Android app: youtube, chrome, whatsapp, or settings."
-            ),
-            "device": types.Schema(
-                type=types.Type.STRING,
-                enum=["phone1", "phone2"],
-                description="Android phone to control."
-            )
-        },
-        required=["app_name", "device"]
-    )
-)
-
-
-android_home = types.FunctionDeclaration(
-    name="android_home",
-    description="Return an Android phone to its home screen.",
-    parameters=types.Schema(
-        type=types.Type.OBJECT,
-        properties={
-            "device": types.Schema(
-                type=types.Type.STRING,
-                enum=["phone1", "phone2"]
-            )
-        },
-        required=["device"]
-    )
-)
-
-
-android_back = types.FunctionDeclaration(
-    name="android_back",
-    description="Press the back button on an Android phone.",
-    parameters=types.Schema(
-        type=types.Type.OBJECT,
-        properties={
-            "device": types.Schema(
-                type=types.Type.STRING,
-                enum=["phone1", "phone2"]
-            )
-        },
-        required=["device"]
-    )
-)
-
-
-get_battery_level = types.FunctionDeclaration(
-    name="get_battery_level",
-    description="Check the battery percentage of an Android phone.",
-    parameters=types.Schema(
-        type=types.Type.OBJECT,
-        properties={
-            "device": types.Schema(
-                type=types.Type.STRING,
-                enum=["phone1", "phone2"]
-            )
-        },
-        required=["device"]
-    )
-)
-
-
-get_device_info = types.FunctionDeclaration(
-    name="get_device_info",
-    description="Get the manufacturer and model of an Android phone.",
-    parameters=types.Schema(
-        type=types.Type.OBJECT,
-        properties={
-            "device": types.Schema(
-                type=types.Type.STRING,
-                enum=["phone1", "phone2"]
-            )
-        },
-        required=["device"]
-    )
-)
-
-
-# ==========================================
-# AURA TOOL COLLECTION
-# ==========================================
-
-aura_tools = types.Tool(
-    function_declarations=[
-        open_windows_app,
-        open_file,
-        lock_laptop,
-        open_android_app,
-        android_home,
-        android_back,
-        get_battery_level,
-        get_device_info
-    ]
-)
-
-
-# ==========================================
-# CONVERSATION MEMORY
-# ==========================================
-
-conversation_history = load_memory()
-
-# ==========================================
-# AURA DEVICE STATE
-# ==========================================
-
-aura_state = {
-    "last_device": None,
-    "last_app": None,
-    "last_action": None
+You are AURA, a practical AI assistant that can answer questions and control the
+user's Windows laptop and two Android phones through the available tools.
+
+Planning and execution rules:
+1. Break multi-action requests into a clear ordered plan internally.
+2. Use tools for real device actions and device information; never claim an action
+   succeeded unless its returned result supports that conclusion.
+3. A tool response is authoritative. Inspect its status and message before deciding
+   what to do next.
+4. AURA's Python runtime executes at most one real tool action per model response.
+   If other calls were deferred, reconsider them after receiving the tool results.
+5. If an action fails, do not repeat it automatically and do not execute an action
+   that depends on the failed action. Independent actions may still be performed
+   when safe and relevant.
+6. Preserve explicit targets: Windows uses target "windows"; Android devices use
+   "phone1" and "phone2". Never silently redirect an action to another device.
+7. Use open_app_on_device for applications that are not covered by the predefined
+   app tools. It must target the requested device.
+8. Keep tool arguments accurate and do not invent filenames, app availability,
+   battery levels, device details, or execution results.
+9. Once the requested work is complete, give a concise summary of successes and
+   failures. If a target device is ambiguous, ask a clarifying question instead
+   of guessing.
+10. Do not expose hidden reasoning. Provide only a brief explanation or plan when
+    useful.
+""".strip()
+
+DEVICE_SCHEMA = {
+    "type": "STRING",
+    "enum": ["phone1", "phone2"],
 }
 
-# ==========================================
-# AURA BRAIN
-# ==========================================
+FUNCTION_DECLARATIONS = [
+    {
+        "name": "open_windows_app",
+        "description": "Open an approved application on the Windows laptop.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "app_name": {
+                    "type": "STRING",
+                    "enum": ["notepad", "calculator", "paint"],
+                }
+            },
+            "required": ["app_name"],
+        },
+    },
+    {
+        "name": "open_file",
+        "description": "Open a file by its exact filename on Windows.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {"file_name": {"type": "STRING"}},
+            "required": ["file_name"],
+        },
+    },
+    {
+        "name": "lock_laptop",
+        "description": "Lock the Windows laptop.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
+        "name": "open_android_app",
+        "description": "Open a predefined Android app on the specified phone.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "app_name": {
+                    "type": "STRING",
+                    "enum": ["youtube", "chrome", "whatsapp", "settings"],
+                },
+                "device": DEVICE_SCHEMA,
+            },
+            "required": ["app_name", "device"],
+        },
+    },
+    {
+        "name": "open_app_on_device",
+        "description": (
+            "Discover and open an app by name on the exact target. Use device "
+            "'windows', 'phone1', or 'phone2'. Never switch targets if not found."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "app_name": {"type": "STRING"},
+                "device": {
+                    "type": "STRING",
+                    "enum": ["windows", "phone1", "phone2"],
+                },
+            },
+            "required": ["app_name", "device"],
+        },
+    },
+    {
+        "name": "android_home",
+        "description": "Return the specified Android phone to its home screen.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {"device": DEVICE_SCHEMA},
+            "required": ["device"],
+        },
+    },
+    {
+        "name": "android_back",
+        "description": "Press Back on the specified Android phone.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {"device": DEVICE_SCHEMA},
+            "required": ["device"],
+        },
+    },
+    {
+        "name": "get_battery_level",
+        "description": "Check the battery level of the specified Android phone.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {"device": DEVICE_SCHEMA},
+            "required": ["device"],
+        },
+    },
+    {
+        "name": "get_device_info",
+        "description": "Get device information for the specified Android phone.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {"device": DEVICE_SCHEMA},
+            "required": ["device"],
+        },
+    },
+]
+
+aura_tools = types.Tool(function_declarations=FUNCTION_DECLARATIONS)
+conversation_history = load_memory() or []
+aura_state = {"last_device": None, "last_app": None, "last_action": None}
+
+
+def _is_success(result):
+    """Handle both the router's outer status and nested discovery result."""
+    if not isinstance(result, dict):
+        return False
+    if result.get("status") != "success":
+        return False
+    nested = result.get("result")
+    if isinstance(nested, dict) and nested.get("success") is False:
+        return False
+    return True
+
+
+def _record_success(tool_name, arguments):
+    aura_state["last_action"] = tool_name
+    device = arguments.get("device")
+    if tool_name == "open_app_on_device":
+        device = arguments.get("device")
+        aura_state["last_app"] = arguments.get("app_name")
+    elif tool_name == "open_android_app":
+        aura_state["last_app"] = arguments.get("app_name")
+    elif tool_name == "open_windows_app":
+        aura_state["last_device"] = "windows"
+        aura_state["last_app"] = arguments.get("app_name")
+    elif tool_name == "android_home" or tool_name == "android_back":
+        aura_state["last_device"] = device
+    if device:
+        aura_state["last_device"] = device
+
+
+def _append_memory(role, text):
+    conversation_history.append({"role": role, "text": text})
+    # Keep the in-memory history bounded; persistent memory remains managed by memory.py.
+    if len(conversation_history) > 40:
+        del conversation_history[:-40]
+    add_memory(role, text)
+
+
+def _result_summary(tool_results):
+    lines = []
+    for name, arguments, result in tool_results:
+        lines.append(f"- {name} {json.dumps(arguments, ensure_ascii=False)}: {result}")
+    return "\n".join(lines)
+
 
 def ask_aura(user_message):
+    """Answer a message and execute tool calls one real action at a time."""
+    user_message = str(user_message).strip()
+    if not user_message:
+        return "Please tell me what you would like me to do."
 
-    global conversation_history
-    global aura_state
-
-    # Add the new user message
-    conversation_history.append(
-        {
-            "role": "user",
-            "text": user_message
-        }
+    _append_memory("user", user_message)
+    recent_history = conversation_history[-12:]
+    history_text = "\n".join(
+        f"{item.get('role', 'user')}: {item.get('text', '')}"
+        for item in recent_history
+        if isinstance(item, dict)
     )
-    add_memory("user", user_message)
-    # Build context for Gemini
-    context_parts = []
+    context = (
+        f"Current device state: {json.dumps(aura_state)}\n\n"
+        f"Recent conversation:\n{history_text}\n\n"
+        f"Current request: {user_message}"
+    )
 
-    for message in conversation_history:
-
-        context_parts.append(
-            f"{message['role'].upper()}: {message['text']}"
-        )
-
-    conversation_context = "\n".join(context_parts)
-
-    state_context = f"""
-    CURRENT AURA STATE:
-    Last device: {aura_state["last_device"]}
-    Last Android app: {aura_state["last_app"]}
-    Last action: {aura_state["last_action"]}
-    """
-
-    # ==================================
-    # BUILD INTELLIGENT CONTEXT
-    # ==================================
-
-    conversation_context = f"""
-    CURRENT AURA STATE:
-    Last device: {aura_state["last_device"]}
-    Last app: {aura_state["last_app"]}
-    Last action: {aura_state["last_action"]}
-
-    RECENT CONVERSATION:
-    """
-
-    for message in conversation_history[-10:]:
-        conversation_context += (
-            f'{message["role"]}: {message["text"]}\n'
-        )
-
-    conversation_context += f"""
-    CURRENT USER REQUEST:
-    {user_message}
-    """
-
-    # Preserve actual tool results if Gemini fails later.
+    contents = [types.Content(role="user", parts=[types.Part.from_text(text=context)])]
     tool_results = []
+    retry_count = 0
+    tool_rounds = 0
 
-    max_retries = 3
-
-    for attempt in range(max_retries):
-
-
+    while tool_rounds < MAX_TOOL_ROUNDS:
         try:
-
-
-            # ==================================
-            # TOOL LOOP
-            # ==================================
-
-            contents = [
-                types.Content(
-                    role="user",
-                    parts=[
-                        types.Part.from_text(
-                            text=conversation_context
-                        )
-                    ]
-                )
-            ]
-
-            while True:
-
-                response = client.models.generate_content(
-                    model="gemini-3.8-flash",
-
-                    contents=contents,
-
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_PROMPT,
-                        tools=[aura_tools]
-                    )
-                )
-
-                
-                # ==================================
-                # EXTRACT TOOL CALLS
-                # ==================================
-
-                if not response.candidates:
-                    raise RuntimeError(
-                        "Gemini returned no response candidates."
-                    )
-
-                # Use the same candidate for both extracting calls
-                # and appending the assistant response to contents.
-                candidate_content = response.candidates[0].content
-
-                function_calls = [
-                    part.function_call
-                    for part in candidate_content.parts
-                    if part.function_call is not None
-                ]
-
-                # ==================================
-                # NO MORE TOOLS → FINAL RESPONSE
-                # ==================================
-
-                if not function_calls:
-                    answer = response.text or (
-                        "I could not generate a response."
-                    )
-
-                    conversation_history.append({
-                        "role": "assistant",
-                        "text": answer
-                    })
-
-                    add_memory("assistant", answer)
-                    return answer
-
-                # ==================================
-                # RECORD GEMINI'S FUNCTION CALLS
-                # ==================================
-
-                contents.append(candidate_content)
-
-                # ==================================
-                # SEQUENTIAL TOOL EXECUTION GUARD
-                # ==================================
-
-                function_response_parts = []
-
-                # Execute at most one real action from this response.
-                # Gemini can reconsider the remaining actions after
-                # receiving the actual result.
-                for index, function_call in enumerate(function_calls):
-
-                    tool_name = function_call.name
-                    arguments = dict(function_call.args)
-
-                    if index == 0:
-                        print(f"\nAURA TOOL → {tool_name}")
-                        print(f"Arguments → {arguments}")
-
-                        result = execute_tool(tool_name, arguments)
-
-                        # Store only actions that were actually executed.
-                        tool_results.append((tool_name, result))
-
-                        print(f"Tool Result → {result}")
-
-                        # Update state only when execution succeeded.
-                        if (
-                            isinstance(result, dict)
-                            and result.get("status") == "success"
-                        ):
-                            aura_state["last_action"] = tool_name
-
-                            if "device" in arguments:
-                                aura_state["last_device"] = (
-                                    arguments["device"]
-                                )
-
-                            if tool_name in [
-                                "open_android_app",
-                                "open_app_on_device"
-                            ]:
-                                aura_state["last_app"] = (
-                                    arguments.get("app_name")
-                                )
-
-                            elif tool_name == "android_home":
-                                aura_state["last_app"] = None
-
-                        response_result = {
-                            "result": str(result)
-                        }
-
-                    else:
-                        # This action was requested by Gemini but
-                        # deliberately not executed in this turn.
-                        print(
-                            "AURA SAFEGUARD → Deferred tool action:",
-                            tool_name,
-                            arguments
-                        )
-
-                        response_result = {
-                            "result": str({
-                                "status": "not_executed",
-                                "tool": tool_name,
-                                "message": (
-                                    "This action was not executed. "
-                                    "Inspect the previous tool result, "
-                                    "then decide whether this action "
-                                    "is still required and safe."
-                                )
-                            })
-                        }
-
-                    function_response_parts.append(
-                        types.Part.from_function_response(
-                            name=tool_name,
-                            response=response_result
-                        )
-                    )
-
-                # ==================================
-                # SEND TOOL RESULTS BACK TO GEMINI
-                # ==================================
-
-                contents.append(
-                    types.Content(
-                        role="user",
-                        parts=function_response_parts
-                    )
-                )
-
-            # ==================================
-            # NORMAL GEMINI RESPONSE
-            # ==================================
-
-            answer = response.text
-
-            conversation_history.append(
-                {
-                    "role": "assistant",
-                    "text": answer
-                }
+            response = client.models.generate_content(
+                model=MODEL,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    tools=[aura_tools],
+                    temperature=0.2,
+                ),
             )
+            retry_count = 0
+        except Exception as error:
+            message = str(error)
+            temporary = any(token in message.upper() for token in (
+                "429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE", "DEADLINE_EXCEEDED"
+            ))
+            if temporary and not tool_results and retry_count < MAX_MODEL_RETRIES:
+                retry_count += 1
+                wait_seconds = min(2 ** retry_count, 8)
+                print(f"AURA: Gemini temporarily unavailable. Retry {retry_count}/{MAX_MODEL_RETRIES} in {wait_seconds}s.")
+                time.sleep(wait_seconds)
+                continue
+            if tool_results:
+                summary = _result_summary(tool_results)
+                answer = (
+                    "I completed the actions shown below, but Gemini became unavailable "
+                    "before I could safely finish the full request:\n" + summary
+                )
+                _append_memory("assistant", answer)
+                return answer
+            return f"AURA could not reach Gemini: {message}"
 
+        if not response.candidates:
+            answer = "Gemini returned no response. Please try again."
+            _append_memory("assistant", answer)
             return answer
 
-        
-        except Exception as e:
+        candidate_content = response.candidates[0].content
+        parts = candidate_content.parts or []
+        function_calls = [part.function_call for part in parts if getattr(part, "function_call", None)]
 
-            error_text = str(e)
+        if not function_calls:
+            answer = (response.text or "I could not generate a response.").strip()
+            if tool_results:
+                # Keep actual action results available so a model answer cannot silently
+                # contradict what the tools returned.
+                answer += "\n\nActions performed:\n" + _result_summary(tool_results)
+            _append_memory("assistant", answer)
+            return answer
 
-            print(f"AURA DEBUG — Gemini/API error: {error_text}")
-            print(f"AURA DEBUG — Recorded tool results: {len(tool_results)}")
+        # Preserve the model's tool-call message in the conversation before responding.
+        contents.append(candidate_content)
+        response_parts = []
 
-            # Identify temporary Gemini/server errors.
-            is_temporary_error = (
-                "429" in error_text
-                or "RESOURCE_EXHAUSTED" in error_text
-                or "503" in error_text
-                or "UNAVAILABLE" in error_text
+        # Execute only the first requested action. Send a response for every call in the
+        # candidate so the function-call turn is fully acknowledged by the API. Deferred
+        # actions are explicitly marked and will be reconsidered by the model afterward.
+        for index, function_call in enumerate(function_calls):
+            tool_name = function_call.name
+            arguments = dict(function_call.args or {})
+            if index == 0:
+                tool_rounds += 1
+                print(f"\nAURA TOOL -> {tool_name}")
+                print(f"Arguments -> {arguments}")
+                try:
+                    result = execute_tool(tool_name, arguments)
+                except Exception as error:
+                    result = {"status": "failure", "tool": tool_name, "message": str(error)}
+                tool_results.append((tool_name, arguments, result))
+                print(f"Tool Result -> {result}")
+                if _is_success(result):
+                    _record_success(tool_name, arguments)
+                response_data = {
+                    "tool": tool_name,
+                    "arguments": arguments,
+                    "result": result,
+                    "status": "success" if _is_success(result) else "failure",
+                }
+            else:
+                response_data = {
+                    "tool": tool_name,
+                    "arguments": arguments,
+                    "status": "not_executed",
+                    "message": (
+                        "This action was not executed. Inspect the preceding real tool result, "
+                        "then decide whether this action is still necessary and safe."
+                    ),
+                }
+                print(f"AURA SAFEGUARD -> Deferred tool action: {tool_name} {arguments}")
+
+            response_parts.append(
+                types.Part.from_function_response(
+                    name=tool_name,
+                    response={"result": json.dumps(response_data, ensure_ascii=False, default=str)},
+                )
             )
 
-            if not is_temporary_error:
-                raise
+        contents.append(types.Content(role="user", parts=response_parts))
 
-            # If tools have already executed, preserve their results
-            # instead of restarting the request and repeating actions.
-            if tool_results:
-
-                outcome_lines = []
-
-                for tool_name, result in tool_results:
-
-                    if isinstance(result, dict):
-                        if result.get("status") == "failure":
-                            outcome_lines.append(
-                                f"- {tool_name}: FAILED — "
-                                f"{result.get('message', 'Tool failed.')}"
-                            )
-
-                        elif result.get("status") == "success":
-                            outcome_lines.append(
-                                f"- {tool_name}: "
-                                f"{result.get('result', 'Completed.')}"
-                            )
-
-                        else:
-                            outcome_lines.append(
-                                f"- {tool_name}: {result}"
-                            )
-
-                    else:
-                        outcome_lines.append(
-                            f"- {tool_name}: {result}"
-                        )
-
-                answer = (
-                    "Gemini became unavailable after AURA executed "
-                    "the following action(s):\n"
-                    + "\n".join(outcome_lines)
-                )
-
-                conversation_history.append({
-                    "role": "assistant",
-                    "text": answer
-                })
-
-                add_memory("assistant", answer)
-
-                return answer
-
-            # No tool has executed yet, so retrying is safe.
-            if attempt < max_retries - 1:
-
-                wait_time = 2 ** attempt
-
-                print(
-                    "AURA: Gemini service temporarily unavailable "
-                    "or rate limited. "
-                    f"Retrying in {wait_time} seconds..."
-                )
-
-                time.sleep(wait_time)
-
-            else:
-                return (
-                    "Gemini is temporarily unavailable. "
-                    "Please try again."
-                )
+    answer = "I stopped because the request required too many tool steps. Completed actions:\n"
+    answer += _result_summary(tool_results) if tool_results else "No actions were executed."
+    _append_memory("assistant", answer)
+    return answer
 
 
-
-# ==========================================
-# CLEAR MEMORY
-# ==========================================
-
-def clear_memory():
-    global conversation_history
-
-    conversation_history = []
-
-    clear_persistent_memory()
-
-    print("AURA: Conversation memory cleared.")
-
-# ==========================================
-# TEST MODE
-# ==========================================
-
-if __name__ == "__main__":
-
-    print("================================")
-    print("     AURA AI - Phase 4.1")
-    print("================================")
+def main():
+    print("=" * 48)
+    print("AURA AI - Phase 5.3: Advanced Task Planning")
     print("Conversation Memory Enabled")
-    print("Type 'clear' to clear memory.")
-    print("Type 'exit' to stop.")
-    print("================================\n")
+    print("Commands: clear | exit")
+    print("=" * 48)
 
     while True:
-
-        user_input = input("You: ").strip()
-
-        if user_input.lower() == "exit":
-
-            print("AURA: Goodbye!")
+        try:
+            user_input = input("\nYou: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nAURA: Shutting down.")
             break
-
-        if user_input.lower() == "clear":
-
-            clear_memory()
-            continue
 
         if not user_input:
             continue
+        command = user_input.lower()
+        if command in {"exit", "quit"}:
+            print("AURA: Goodbye.")
+            break
+        if command == "clear":
+            conversation_history.clear()
+            clear_persistent_memory()
+            aura_state.update({"last_device": None, "last_app": None, "last_action": None})
+            print("AURA: Conversation memory cleared.")
+            continue
 
-        try:
+        answer = ask_aura(user_input)
+        print(f"\nAURA: {answer}")
 
-            answer = ask_aura(user_input)
 
-            print("AURA:", answer)
-
-        except Exception as e:
-
-            print("AURA Error:", e)
+if __name__ == "__main__":
+    main()
