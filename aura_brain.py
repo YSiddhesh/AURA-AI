@@ -45,6 +45,22 @@ Planning and execution rules:
    of guessing.
 10. Do not expose hidden reasoning. Provide only a brief explanation or plan when
     useful.
+
+
+11. Understand follow-up commands using the recent conversation. Words such
+    as "there", "that phone", and "the same app" may refer to a device or
+    application mentioned earlier.
+12. Resolve references such as "there" only when the recent conversation
+    clearly identifies the intended device. If the target is ambiguous,
+    ask the user to clarify instead of guessing.
+13. For commands such as "open another app there", reuse the previous device
+    only when the conversation supports that interpretation. Do not assume
+    the previous device is always the intended target.
+14. Treat "do it again" as a request to repeat the previous action only when
+    that action and its target are clear.
+15. Conversation history provides context, not proof of success. Check actual
+    tool results before claiming that an application opened or an action worked.
+
 """.strip()
 
 DEVICE_SCHEMA = {
