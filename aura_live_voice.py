@@ -346,3 +346,6 @@ if __name__ == "__main__":
         print("\nAURA voice session stopped.")
     except Exception as error:
         print(f"\nAURA error: {error}")
+
+
+        
