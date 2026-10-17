@@ -231,6 +231,7 @@ async def receive_responses(session):
                 content = message.server_content
                 if content and content.interrupted:
                     print("\nAURA: Speech interrupted.")
+                    await asyncio.to_thread(speakers.abort)
                     continue
 
                 if content is None:
