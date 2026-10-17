@@ -1,5 +1,8 @@
 import asyncio
+import threading
+from collections import deque
 
+import numpy as np
 import sounddevice as sd
 from dotenv import load_dotenv
 from google import genai
@@ -179,43 +182,67 @@ async def send_microphone(session):
 async def receive_responses(session):
     print("AURA is listening continuously. Press Ctrl+C to stop.")
 
-    with sd.RawOutputStream(
+    # Keep the output stream running. The callback plays queued PCM audio,
+    # allowing an interruption to discard pending speech without aborting
+    # PortAudio's stream.
+    audio_buffer = deque()
+    audio_lock = threading.Lock()
+    current_chunk = None
+    current_offset = 0
+
+    def audio_callback(outdata, frames, time_info, status):
+        nonlocal current_chunk, current_offset
+        outdata.fill(0)
+
+        with audio_lock:
+            written = 0
+            while written < frames:
+                if current_chunk is None or current_offset >= current_chunk.size:
+                    if not audio_buffer:
+                        break
+                    current_chunk = audio_buffer.popleft()
+                    current_offset = 0
+
+                count = min(frames - written, current_chunk.size - current_offset)
+                outdata[written:written + count, 0] = current_chunk[
+                    current_offset:current_offset + count
+                ]
+                written += count
+                current_offset += count
+
+                if current_offset >= current_chunk.size:
+                    current_chunk = None
+                    current_offset = 0
+
+    with sd.OutputStream(
         samplerate=OUTPUT_RATE,
         channels=1,
         dtype="int16",
-    ) as speakers:
-
+        blocksize=BLOCK_SIZE,
+        callback=audio_callback,
+    ):
         while True:
             input_chunks = []
             output_chunks = []
 
             async for message in session.receive():
-
                 # Handle requested tool calls.
                 if message.tool_call:
                     function_responses = []
-
                     for call in message.tool_call.function_calls:
                         tool_name = call.name
                         arguments = dict(call.args or {})
-
                         print(f"\nAURA TOOL -> {tool_name}")
                         print(f"Arguments -> {arguments}")
 
                         try:
                             result = await asyncio.to_thread(
-                                execute_tool,
-                                tool_name,
-                                arguments,
+                                execute_tool, tool_name, arguments
                             )
                         except Exception as error:
-                            result = {
-                                "status": "failure",
-                                "message": str(error),
-                            }
+                            result = {"status": "failure", "message": str(error)}
 
                         print(f"Tool Result -> {result}")
-
                         function_responses.append(
                             types.FunctionResponse(
                                 id=call.id,
@@ -229,12 +256,17 @@ async def receive_responses(session):
                     )
 
                 content = message.server_content
-                if content and content.interrupted:
-                    print("\nAURA: Speech interrupted.")
-                    await asyncio.to_thread(speakers.abort)
+                if content is None:
                     continue
 
-                if content is None:
+                # Clear queued audio on interruption. Do not stop the stream,
+                # because subsequent responses must still be played.
+                if getattr(content, "interrupted", False):
+                    with audio_lock:
+                        audio_buffer.clear()
+                        current_chunk = None
+                        current_offset = 0
+                    print("\nAURA: Speech interrupted.")
                     continue
 
                 if content.input_transcription:
@@ -250,18 +282,20 @@ async def receive_responses(session):
                 if content.model_turn:
                     for part in content.model_turn.parts:
                         if part.inline_data and part.inline_data.data:
-                            await asyncio.to_thread(
-                                speakers.write,
-                                part.inline_data.data,
-                            )
+                            audio_bytes = part.inline_data.data
+                            # Avoid a malformed final sample if the byte count is odd.
+                            if len(audio_bytes) % 2:
+                                audio_bytes = audio_bytes[:-1]
+                            if audio_bytes:
+                                pcm = np.frombuffer(audio_bytes, dtype=np.int16).copy()
+                                with audio_lock:
+                                    audio_buffer.append(pcm)
 
                 if content.turn_complete:
                     if input_chunks:
                         print("\nYou:", "".join(input_chunks))
-
                     if output_chunks:
                         print("AURA:", "".join(output_chunks))
-
                     print()
                     break
 
