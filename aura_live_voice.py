@@ -229,6 +229,9 @@ async def receive_responses(session):
                     )
 
                 content = message.server_content
+                if content and content.interrupted:
+                    print("\nAURA: Speech interrupted.")
+                    continue
 
                 if content is None:
                     continue
