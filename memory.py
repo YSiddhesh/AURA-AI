@@ -34,15 +34,41 @@ def load_memory():
         return []
 
 
+
 def save_memory(memory):
-    """Save the most recent conversation entries."""
+    """Save recent conversation entries with a safer file-replacement strategy."""
     if not isinstance(memory, list):
         raise TypeError("Memory must be a list.")
 
     memory = memory[-MAX_MEMORY_ENTRIES:]
 
-    with MEMORY_FILE.open("w", encoding="utf-8") as file:
-        json.dump(memory, file, indent=4, ensure_ascii=False)
+    # Validate entries before saving.
+    memory = [
+        entry
+        for entry in memory
+        if isinstance(entry, dict)
+        and isinstance(entry.get("role"), str)
+        and isinstance(entry.get("text"), str)
+    ]
+
+    temporary_file = MEMORY_FILE.with_suffix(".tmp")
+
+    try:
+        with temporary_file.open("w", encoding="utf-8") as file:
+            json.dump(memory, file, indent=4, ensure_ascii=False)
+            file.flush()
+            os.fsync(file.fileno())
+
+        # Replace the original only after the temporary file is complete.
+        os.replace(temporary_file, MEMORY_FILE)
+
+    finally:
+        # Remove a leftover temporary file if one remains.
+        try:
+            temporary_file.unlink(missing_ok=True)
+        except OSError:
+            pass
+
 
 
 def add_memory(role, text):
