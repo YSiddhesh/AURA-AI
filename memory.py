@@ -1,3 +1,4 @@
+import re
 import json
 import os
 from pathlib import Path
@@ -92,6 +93,48 @@ def get_recent_memory(limit=10):
         raise ValueError("Limit must be a positive integer.")
 
     return load_memory()[-limit:]
+
+
+def search_memory(query, limit=5):
+    """Find stored conversation entries that match important query keywords."""
+    if not isinstance(query, str):
+        raise TypeError("Query must be a string.")
+
+    if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+        raise ValueError("Limit must be a positive integer.")
+
+    stop_words = {
+        "a", "an", "and", "are", "did", "do", "does", "for",
+        "i", "in", "is", "it", "me", "my", "of", "on", "or",
+        "the", "to", "was", "were", "what", "when", "where",
+        "which", "who", "why", "with", "you", "your", "previously"
+    }
+
+    def keywords(text):
+        words = set(re.findall(r"[a-z]+", text.lower()))
+        return words - stop_words
+
+    query_words = keywords(query)
+
+    if not query_words:
+        return []
+
+    memory = load_memory()
+    matches = []
+
+    for index, entry in enumerate(memory):
+        entry_words = keywords(entry["text"])
+        overlap = query_words & entry_words
+
+        if overlap:
+            # Prefer entries matching more query keywords.
+            score = len(overlap)
+            matches.append((score, index, entry))
+
+    # Higher scores first; newer entries win ties.
+    matches.sort(key=lambda item: (item[0], item[1]), reverse=True)
+
+    return [entry for _, _, entry in matches[:limit]]
 
 
 def clear_memory():
