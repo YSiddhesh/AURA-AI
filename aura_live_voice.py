@@ -10,7 +10,7 @@ from google import genai
 from google.genai import types
 
 from tool_router import execute_tool
-from memory import add_memory, get_recent_memory
+from memory import add_memory, get_recent_memory, search_memory
 
 load_dotenv()
 
